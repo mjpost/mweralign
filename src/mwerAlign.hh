@@ -10,12 +10,13 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <iterator>
+#include <algorithm>
 
 using namespace std;
 
 typedef std::vector<std::string> Sentence;
 typedef vector<Sentence> Text;
-typedef deque<Sentence> DequeText;
 
 inline char mytolower(const char &c) { return tolower(c); }
 
