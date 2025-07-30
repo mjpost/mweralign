@@ -20,19 +20,13 @@ ADD_DEFINITIONS(-Wall -O2 -static)
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/src)
 
 set(mwerAlign_LIB_SRCS
-    ${CMAKE_SOURCE_DIR}/src/IOfile.cc  
-    ${CMAKE_SOURCE_DIR}/src/mwerAlign.cc  
-    ${CMAKE_SOURCE_DIR}/src/SimpleText2.cc
-    ${CMAKE_SOURCE_DIR}/src/gzstream.cc
+    ${CMAKE_SOURCE_DIR}/src/mwerAlign.cc
 )
 add_library(mwerAlignLib STATIC ${mwerAlign_LIB_SRCS})
 
 SET(mwerAlign_BIN_SRCS
    ${CMAKE_SOURCE_DIR}/src/main.cc
-   ${CMAKE_SOURCE_DIR}/src/IOfile.cc
    ${CMAKE_SOURCE_DIR}/src/mwerAlign.cc
-   ${CMAKE_SOURCE_DIR}/src/SimpleText2.cc
-   ${CMAKE_SOURCE_DIR}/src/gzstream.cc
 )
 
 add_executable(mwerAlign ${mwerAlign_BIN_SRCS})
@@ -40,13 +34,7 @@ add_executable(mwerAlign ${mwerAlign_BIN_SRCS})
 # add_subdirectory(src)
 # add_subdirectory(test)
 
-#ADD_EXECUTABLE(tercpp main.cpp)
 
-#install(TARGETS tercpp DESTINATION bin)
-
-#need to link to some other libraries ? just add them here
-#TARGET_LINK_LIBRARIES(tercpp png jpeg)
- 
 # add_library(mwerAlignLib STATIC ${mwerAlign_LIB_SRCS})
 # add_executable(mwerAlign main.cc)
 
@@ -54,5 +42,5 @@ target_link_libraries(mwerAlign z mwerAlignLib)
 
 install(TARGETS mwerAlign DESTINATION bin)
 install(TARGETS mwerAlignLib DESTINATION lib)
-install(FILES main.cc  IOfile.hh mwerAlign.cc SimpleText2.hh gzstream.hh DESTINATION include)
+install(FILES main.cc  IOfile.hh mwerAlign.cc DESTINATION include)
 

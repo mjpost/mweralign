@@ -23,7 +23,7 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(_mweralign, m) {
     m.doc() = "Minimum Word Error Rate Alignment";
-    
+
     py::class_<MwerSegmenter>(m, "MwerSegmenter")
         .def(py::init<>())
         .def("mwerAlign", [](MwerSegmenter& self, const std::string& ref, const std::string& hyp) -> std::string {
@@ -41,7 +41,7 @@ PYBIND11_MODULE(_mweralign, m) {
             std::istringstream stream(content);
             return self.loadrefsFromStream(stream);
         }, "Load references from string content")
-        .def("evaluate", [](const MwerSegmenter& self, const TextNS::SimpleText& hyps) {
+        .def("evaluate", [](const MwerSegmenter& self, const Text& hyps) {
             std::ostringstream out;
             double result = self.evaluate(hyps, out);
             return py::make_tuple(result, out.str());

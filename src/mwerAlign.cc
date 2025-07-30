@@ -9,7 +9,45 @@
 
 using namespace std;
 
-std::istream &operator>>(std::istream &in, Text &x);
+
+std::istream &operator>>(std::istream &in, Sentence &x)
+{
+    x.clear();
+    std::string line;
+    getline(in, line);
+    std::istringstream is(line);
+    typedef std::istream_iterator<std::string> iter;
+    std::copy(iter(is), iter(), std::back_inserter(x));
+    return in;
+}
+
+std::ostream &operator<<(std::ostream &out, const Sentence &x)
+{
+    std::copy(x.begin(), x.end(), std::ostream_iterator<std::string>(out, " "));
+    return out;
+}
+
+std::ostream &operator<<(std::ostream &out, const Text &x)
+{
+  for (Text::const_iterator i = x.begin(); i != x.end(); ++i) {
+        out << *i << "\n";
+    }
+    out << std::flush;
+    return out;
+}
+
+std::istream &operator>>(std::istream &in, Text &x)
+{
+    std::string line, w;
+    while (getline(in, line)) {
+        std::istringstream is(line);
+        x.push_back(Sentence());
+        while (is >> w)
+            x.back().push_back(w);
+    }
+    return in;
+}
+
 
 /** Load reference sentences from MRefContainer
  * Initialize then all necessary reference data structures.
@@ -61,7 +99,7 @@ bool MwerSegmenter::loadrefsFromStream(std::istream &in)
 
         // std::cerr << "Read line: " << line << std::endl;
 
-        hyptype h_m = TextNS::makeSent(usecase ? line : TextNS::makelowerstring(line));
+        hyptype h_m = makeSent(usecase ? line : makelowerstring(line));
         for (hyptype::const_iterator i = h_m.begin(); i != h_m.end(); ++i) {
             // multiple references are delimited by ### (TODO(MJ): let's use a tab!
             if (*i == "###") {
@@ -166,7 +204,7 @@ double MwerSegmenter::evaluate(const HypContainer &hyps, std::ostream &out) cons
  */
 unsigned int MwerSegmenter::getVocIndex(const std::string &word) const
 {
-    std::string wlc = TextNS::makelowerstring(word);
+    std::string wlc = makelowerstring(word);
     std::map<std::string, unsigned int>::const_iterator p = vocMap_.find(wlc);
     if (p != vocMap_.end())
         return p->second;
@@ -403,3 +441,4 @@ void MwerSegmenter::fillPunctuationSet()
     punctuationSet_.insert(getVocIndex("("));
     punctuationSet_.insert(getVocIndex("\""));
 }
+

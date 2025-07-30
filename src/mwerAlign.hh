@@ -4,8 +4,7 @@
 /* ---------------------------------------------------------------- */
 #ifndef MWERALIGN_HH_
 #define MWERALIGN_HH_
-// #include "Evaluator.hh"
-#include "SimpleText2.hh"
+
 #include <map>
 #include <set>
 #include <sstream>
@@ -14,22 +13,54 @@
 
 using namespace std;
 
-typedef TextNS::SimpleText Text;
+typedef std::vector<std::string> Sentence;
+typedef vector<Sentence> Text;
+typedef deque<Sentence> DequeText;
+
+inline char mytolower(const char &c) { return tolower(c); }
+
+inline string makelowerstring(const string &s)
+{
+    string rv(s);
+    transform(rv.begin(), rv.end(), rv.begin(), mytolower);
+    return rv;
+}
+
+inline Sentence makelowersent(const Sentence &s)
+{
+    Sentence rv(s.size());
+    transform(s.begin(), s.end(), rv.begin(), makelowerstring);
+    return rv;
+}
+
+template <class T> inline void makelowertext(const T &in, T &out)
+{
+    out.resize(in.size());
+    transform(in.begin(), in.end(), out.begin(), makelowersent);
+}
+
+inline Sentence makeSent(const string &s)
+{
+    Sentence rv;
+    istringstream is(s);
+    copy(istream_iterator<string>(is), istream_iterator<string>(), back_inserter(rv));
+    return rv;
+}
 
 class MwerSegmenter
 {
   public:
     /** A candidate (hypothesis) sentence */
-    typedef TextNS::Sentence hyptype;
+    typedef Sentence hyptype;
 
     /** A candidate (hypothesis) corpus */
-    typedef TextNS::SimpleText HypContainer;
+    typedef Text HypContainer;
 
     /** Multiple reference sentences for a candidate sentence */
-    typedef std::vector<hyptype> mreftype;
+    typedef vector<hyptype> mreftype;
 
     /** Corpus multiple reference sentences for a candidate corpus */
-    typedef std::vector<mreftype> MRefContainer;
+    typedef vector<mreftype> MRefContainer;
 
     /** General evaluation exception */
     class EvaluationException
@@ -73,21 +104,21 @@ class MwerSegmenter
     bool referencesAreOk;
     bool segmenting;
 
-    const std::string underscoreWord = "▁";
+    const string underscoreWord = "▁";
 
     /** Container for the reference sentences **/
     MRefContainer mref;
-    mutable std::map<std::string, unsigned int> vocMap_;
-    mutable std::map<unsigned int, std::string> voc_id_to_word_map_;
+    mutable map<string, unsigned int> vocMap_;
+    mutable map<unsigned int, string> voc_id_to_word_map_;
 
-    mutable std::set<unsigned int> punctuationSet_;
-    mutable std::vector<unsigned int> boundary;
-    mutable std::vector<unsigned int> sentCosts;
+    mutable set<unsigned int> punctuationSet_;
+    mutable vector<unsigned int> boundary;
+    mutable vector<unsigned int> sentCosts;
 
-    double computeSpecialWER(const std::vector<std::vector<unsigned int>> &ref_ids,
-                             const std::vector<unsigned int> &hyp_ids, unsigned int nSegments) const;
-    unsigned int getVocIndex(const std::string &word) const;
-    std::string getVocWord(const uint id) const;
+    double computeSpecialWER(const vector<vector<unsigned int>> &ref_ids,
+                             const vector<unsigned int> &hyp_ids, unsigned int nSegments) const;
+    unsigned int getVocIndex(const string &word) const;
+    string getVocWord(const uint id) const;
 
     unsigned int getSubstitutionCosts(const uint a, const uint b) const;
     unsigned int getInsertionCosts(const uint w) const;
@@ -106,18 +137,18 @@ class MwerSegmenter
 
     ~MwerSegmenter() {}
 
-    void mwerAlign(const std::string &ref, const std::string &hyp, std::string &result);
+    void mwerAlign(const string &ref, const string &hyp, string &result);
 
     /** return normalized number of errors (= error rate)
      * \param sentence hyps Candidate corpus to evaluate
      **/
-    double evaluate(const HypContainer &hyps, std::ostream &out = std::cout) const;
+    double evaluate(const HypContainer &hyps, ostream &out) const;
 
     /** write detailed evaluation information to output stream
      * \param out Output stream to write evaluation to
      * \param hyps Candidate corpus to evaluate
      **/
-    void detailed_evaluation(std::ostream &, const HypContainer &) const {};
+    void detailed_evaluation(ostream &, const HypContainer &) const {};
 
     /** set flag for case sensitivity
      * \param b \em true: regard case information; \em false: neglect case information
@@ -141,9 +172,9 @@ class MwerSegmenter
      * \param filename MRef file name
      * \return true iff loading was successfull
      **/
-    bool loadrefs(const std::string &filename);
+    bool loadrefs(const string &filename);
 
-    bool loadrefsFromStream(std::istream &in);
+    bool loadrefsFromStream(istream &in);
 
     /** Load reference sentences from MRefContainer
      * Initialize then all necessary reference data structures.
@@ -160,16 +191,15 @@ class MwerSegmenter
         unsigned int cost;
         unsigned int bp;
     } DP;
-    typedef std::vector<std::vector<DP>> Matrix;
+    typedef vector<vector<DP>> Matrix;
 
     void setInsertionCosts(double x) { ins_ = x; }
     void setDeletionCosts(double x) { del_ = x; }
 };
 
-inline std::ostream &operator<<(std::ostream &out, const MwerSegmenter::hyptype &x)
-{
-    std::copy(x.begin(), x.end(), std::ostream_iterator<std::string>(out, " "));
-    return out;
-};
+std::istream &operator>>(std::istream &in, Sentence &x);
+std::ostream &operator<<(std::ostream &out, const Sentence &x);
+std::ostream &operator<<(std::ostream &out, const Text &x);
+std::istream &operator>>(std::istream &in, Text &x);
 
 #endif
