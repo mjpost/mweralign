@@ -1,0 +1,11 @@
+## v1.0.1 (2025-07-30)
+
+### Fixed
+- Compilation issues on Mac OS (Darwin 24.5.0)
+
+### Changed
+- Removed a number of unused C++ files
+
+## v1.0.0
+
+Initial release.
