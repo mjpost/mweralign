@@ -8,7 +8,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["python"]
 include = ["mweralign*"]
 namespaces = true
 
@@ -24,6 +24,10 @@ skip = [
 # Ensure we get manylinux2014 wheels (widely compatible)
 manylinux-x86_64-image = "manylinux2014"
 manylinux-aarch64-image = "manylinux2014"
+
+# Smoke-test each built wheel against the regression suite.
+test-requires = "pytest"
+test-command = "pytest {project}/python/tests"
 
 [tool.cibuildwheel.linux]
 before-all = "yum install -y cmake3 || apt-get update && apt-get install -y cmake"
@@ -58,3 +62,6 @@ dev = ["pytest", "black", "flake8"]
 
 [project.scripts]
 mweralign = "mweralign.mweralign:main"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]

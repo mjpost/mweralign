@@ -2,4 +2,4 @@ include README.md
 include LICENSE
 include pyproject.toml
 recursive-include src *.cc *.hh
-recursive-include bindings *.cpp *.h
+recursive-include python/bindings *.cpp *.h

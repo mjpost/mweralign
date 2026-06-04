@@ -49,11 +49,68 @@ languages, it has no effect.
 
     mweralign -r ref.txt -h hyp.txt -o aligned.txt -t cj -l zh
 
+## Project layout
+
+    src/                 # C++ core library and standalone CLI
+    python/
+      mweralign/         # Python package (CLI + wrappers)
+      bindings/          # pybind11 bindings (mweralign._mweralign)
+      tests/             # pytest unit + regression suite
+        regression/      # golden-file CLI regression cases
+    CMakeLists.txt       # builds the standalone C++ `mwerAlign` binary
+    setup.py / pyproject.toml  # builds the Python package/extension
+
+## Development
+
+Install in editable mode with the development dependencies and run the tests:
+
+    pip install -e ".[dev]"
+    pytest python/tests
+
+### Regression suite
+
+The regression suite under `python/tests/regression/` runs the `mweralign`
+CLI on fixed inputs and compares the output to committed golden files. Each
+case is a directory containing a `cmd` file (the CLI arguments), the input
+files it references, and an `expected.txt` golden output.
+
+After an intentional change in behavior, regenerate the golden files with:
+
+    MWERALIGN_REGEN=1 pytest python/tests/test_regression.py
+
+To add a new case, create a directory under `python/tests/regression/`, add a
+`cmd` file plus its input files, and run the regen command above to produce
+`expected.txt`.
+
+### Building the standalone C++ CLI
+
+The Python package builds its own extension, so this is only needed if you want
+the standalone `mwerAlign` binary:
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
+    # binary at build/mwerAlign
+
 ## Citation
 
 If you use this package, please cite the following two papers. We suggest a sentence
 similar to the following: "To align the text, we used the mweralign package \citep{post-huang-2025-effects},
 which implements a variant of the AS-WER algorithm \citep{matusov-etal-2005-evaluating}.
+
+> @inproceedings{post-hoang-2025-effects,
+>    title = "Effects of automatic alignment on speech translation metrics",
+>    author = "Post, Matt and Hoang, Hieu",
+>    editor = "Salesky, Elizabeth  and Federico, Marcello  and Anastasopoulos, Antonis",
+>    booktitle = "Proceedings of the 22nd International Conference on Spoken Language Translation (IWSLT 2025)",
+>    month = jul,
+>    year = "2025",
+>    address = "Vienna, Austria (in-person and online)",
+>    publisher = "Association for Computational Linguistics",
+>    url = "https://aclanthology.org/2025.iwslt-1.7/",
+>    doi = "10.18653/v1/2025.iwslt-1.7",
+>    pages = "84--92",
+>    ISBN = "979-8-89176-272-5",
+> }
 
 > @inproceedings{matusov2005evaluating,
 >   title={Evaluating machine translation output with automatic sentence segmentation},
@@ -62,12 +119,6 @@ which implements a variant of the AS-WER algorithm \citep{matusov-etal-2005-eval
 >   pages={138--144},
 >   year={2005}
 > }
-
-> @inproceedings{post-huang-2025-effects,
->   title={Effects of automatic alignment on speech translation metric},
->   author={Post, Matt and Hoang, Hieu},
->   booktitle={Proceedings of IWSLT 2025},
->   year={2025}
 > }
 
 

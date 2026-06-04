@@ -1,58 +1,52 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 
-PROJECT(mwerAlign)
+project(mwerAlign
+    VERSION 1.0.0
+    DESCRIPTION "Minimum Word Error Rate alignment for speech translation evaluation"
+    LANGUAGES CXX)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}")
+# Default to a release build when none is specified.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
-#if you don't want the full compiler output, remove the following line
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x ")
-SET(CMAKE_VERBOSE_MAKEFILE ON)
-#SET( CMAKE_CXX_FLAGS " -Wno-deprecated " CACHE STRING "Flags used by the C++ compiler" FORCE )
-#add_definitions(-DCMAKE_INSTALL_PREFIX=YOUR INSTALL DIR HERE!!!)
-add_definitions(-DIBPP_LINUX -DIBPP_GCC)
-# include_directories(YOUR INCLUDE DIR HERE!!!)
-# link_directories(YOUR LIB DIR HERE!!!)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-#add definitions, compiler switches, etc.
-ADD_DEFINITIONS(-Wall -O2 -static)
+option(MWERALIGN_WERROR "Treat compiler warnings as errors" OFF)
 
-# List all source files here
-include_directories(BEFORE ${CMAKE_SOURCE_DIR}/src)
+# zlib is required by gzstream.
+find_package(ZLIB REQUIRED)
 
-set(mwerAlign_LIB_SRCS
-    ${CMAKE_SOURCE_DIR}/src/IOfile.cc  
-    ${CMAKE_SOURCE_DIR}/src/mwerAlign.cc  
-    ${CMAKE_SOURCE_DIR}/src/SimpleText2.cc
-    ${CMAKE_SOURCE_DIR}/src/gzstream.cc
+# Core algorithm library, shared between the CLI and (potentially) other tools.
+add_library(mwerAlignLib STATIC
+    src/IOfile.cc
+    src/mwerAlign.cc
+    src/SimpleText2.cc
+    src/gzstream.cc
 )
-add_library(mwerAlignLib STATIC ${mwerAlign_LIB_SRCS})
-
-SET(mwerAlign_BIN_SRCS
-   ${CMAKE_SOURCE_DIR}/src/main.cc
-   ${CMAKE_SOURCE_DIR}/src/IOfile.cc
-   ${CMAKE_SOURCE_DIR}/src/mwerAlign.cc
-   ${CMAKE_SOURCE_DIR}/src/SimpleText2.cc
-   ${CMAKE_SOURCE_DIR}/src/gzstream.cc
+target_include_directories(mwerAlignLib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<INSTALL_INTERFACE:include>
 )
+target_link_libraries(mwerAlignLib PUBLIC ZLIB::ZLIB)
+target_compile_options(mwerAlignLib PRIVATE -Wall)
+if(MWERALIGN_WERROR)
+    target_compile_options(mwerAlignLib PRIVATE -Werror)
+endif()
 
-add_executable(mwerAlign ${mwerAlign_BIN_SRCS})
+# Command-line tool.
+add_executable(mwerAlign src/main.cc)
+target_link_libraries(mwerAlign PRIVATE mwerAlignLib)
 
-# add_subdirectory(src)
-# add_subdirectory(test)
-
-#ADD_EXECUTABLE(tercpp main.cpp)
-
-#install(TARGETS tercpp DESTINATION bin)
-
-#need to link to some other libraries ? just add them here
-#TARGET_LINK_LIBRARIES(tercpp png jpeg)
- 
-# add_library(mwerAlignLib STATIC ${mwerAlign_LIB_SRCS})
-# add_executable(mwerAlign main.cc)
-
-target_link_libraries(mwerAlign z mwerAlignLib)
-
-install(TARGETS mwerAlign DESTINATION bin)
-install(TARGETS mwerAlignLib DESTINATION lib)
-install(FILES main.cc  IOfile.hh mwerAlign.cc SimpleText2.hh gzstream.hh DESTINATION include)
-
+install(TARGETS mwerAlign
+    RUNTIME DESTINATION bin)
+install(TARGETS mwerAlignLib
+    ARCHIVE DESTINATION lib)
+install(FILES
+    src/mwerAlign.hh
+    src/SimpleText2.hh
+    src/IOfile.hh
+    src/gzstream.hh
+    DESTINATION include)
