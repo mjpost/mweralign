@@ -42,5 +42,24 @@ def test_mweralign_class():
     assert isinstance(success, bool)
 
 
+def test_empty_reference_line():
+    """Regression test for issue #1: an empty reference line must not crash.
+
+    An empty line denotes an (empty) segment, so the output must contain a
+    line for it and keep the alignment of the surrounding segments intact.
+    """
+    result = align_texts("aa\n\nbb", "aa bb")
+    segments = result.split("\n")
+    # one output segment per reference line (trailing newline yields an extra
+    # empty element, which we ignore here)
+    assert [s.strip() for s in segments[:3]] == ["aa", "", "bb"]
+
+
+def test_only_empty_reference_lines():
+    """Issue #1: a reference made up entirely of empty lines must not crash."""
+    result = align_texts("\n\n", "x y")
+    assert isinstance(result, str)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
