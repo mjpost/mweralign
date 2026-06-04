@@ -77,6 +77,14 @@ bool MwerSegmenter::loadrefsFromStream(std::istream &in)
         if (!h.empty())
             refs.push_back(h);
 
+        // An empty reference line still denotes a segment. Preserve it as a
+        // single empty reference so that evaluate() emits a segmentation marker
+        // for it; otherwise the segment count (mref.size()) and the number of
+        // markers in ref_ids drift apart, corrupting the backtrace and causing
+        // a segmentation fault (issue #1).
+        if (refs.empty())
+            refs.push_back(hyptype());
+
         mref.push_back(refs);
     }
 
