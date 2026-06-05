@@ -1,0 +1,1 @@
+--score -r ref.txt -t hyp.txt

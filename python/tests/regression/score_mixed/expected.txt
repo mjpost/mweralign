@@ -1,0 +1,5 @@
+segment 1: WER=0.00 (S=0 I=0 D=0 N=4)
+segment 2: WER=40.00 (S=1 I=1 D=0 N=5)
+segment 3: WER=100.00 (S=0 I=0 D=5 N=5)
+segment 4: WER=0.00 (S=0 I=0 D=0 N=3)
+TOTAL: WER=41.18 (errors=7 ref_words=17)
