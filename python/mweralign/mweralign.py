@@ -44,6 +44,19 @@ class MwerAlign:
         """
         self._segmenter.set_tokenized(is_tokenized)
 
+    def set_legacy_penalty(self, enable: bool):
+        """
+        TEMPORARY: restore the pre-fix penalty behavior.
+
+        When enabled, the segment-initial "internal word" penalty is applied
+        even for untokenized (whitespace) input, reproducing alignments produced
+        before the untokenized-alignment fix.
+
+        Args:
+            enable: True to apply the legacy (paper) penalty behavior
+        """
+        self._segmenter.set_legacy_penalty(enable)
+
     def align(self, reference: str, hypothesis: str) -> str:
         """
         Align reference and hypothesis strings.
@@ -95,7 +108,8 @@ class MwerAlign:
         return 0.0, ""
 
 
-def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False) -> str:
+def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False,
+                legacy_penalty: bool = False) -> str:
     """
     Convenience function to align two texts.
     
@@ -103,12 +117,15 @@ def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False) -> 
         reference: Reference text
         hypothesis: Hypothesis text
         is_tokenized: Whether the texts are tokenized (default: False)
+        legacy_penalty: Restore the pre-fix penalty behavior (default: False)
         
     Returns:
         Alignment result
     """
     aligner = MwerAlign()
     aligner.set_tokenized(is_tokenized)
+    if legacy_penalty:
+        aligner.set_legacy_penalty(True)
     return aligner.align(reference, hypothesis)
 
 
@@ -197,6 +214,10 @@ def main():
     parser.add_argument("--score", action="store_true", default=False,
                         help="Scoring mode: ref and hyp are already aligned line-by-line; "
                              "report per-segment and corpus WER instead of aligning.")
+    parser.add_argument("--legacy-penalty", action="store_true", default=False,
+                        help="TEMPORARY: restore the pre-fix penalty behavior (apply the "
+                             "segment-initial internal-word penalty even for untokenized "
+                             "input). Used to reproduce pre-fix (paper) results.")
     args = parser.parse_args()
 
     refs = [line.strip() for line in args.ref_file.readlines()]
@@ -301,7 +322,8 @@ def main():
 
         # Perform alignment
         try:
-            result = align_texts(ref_str, hyp_str, is_tokenized=is_tokenized)
+            result = align_texts(ref_str, hyp_str, is_tokenized=is_tokenized,
+                                 legacy_penalty=args.legacy_penalty)
             
             # Output result
             for line in result.split("\n"):

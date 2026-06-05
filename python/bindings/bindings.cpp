@@ -34,6 +34,10 @@ PYBIND11_MODULE(_mweralign, m) {
         .def("set_tokenized", &MwerSegmenter::setsegmenting,
              "Set whether the references are tokenized",
              py::arg("tokenize"))
+        .def("set_legacy_penalty", &MwerSegmenter::setLegacyPenalty,
+             "TEMPORARY: restore the pre-fix penalty behavior (apply the "
+             "segment-initial internal-word penalty even for untokenized input)",
+             py::arg("enable"))
         .def("loadrefs", &MwerSegmenter::loadrefs,
              "Load references from file",
              py::arg("filename"))

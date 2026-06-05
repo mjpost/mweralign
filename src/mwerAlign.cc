@@ -257,8 +257,9 @@ unsigned int MwerSegmenter::additionalInsertionCosts(const unsigned int ref_next
     // where word-internal pieces lack the leading marker. With plain whitespace
     // input every word looks "internal" (isInternal() == true), so without the
     // segmenting guard this penalty would fire on every segment-initial insertion
-    // and corrupt the alignment.
-    if (segmenting && is_new_sent && isInternal(w)) {
+    // and corrupt the alignment. The legacyPenalty_ flag intentionally drops the
+    // guard to reproduce the pre-fix (paper) behavior.
+    if ((segmenting || legacyPenalty_) && is_new_sent && isInternal(w)) {
         return 1000;
     }
 
@@ -277,6 +278,14 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
     unsigned int S = nSegments;
     std::vector<std::vector<unsigned int>> BP(J + 1), BC(J + 1);
     std::vector<std::vector<unsigned short>> BR(J + 1);
+    // Index 0 of the backpointer tables is never written in the main loop (which
+    // runs j = 1..J), but the backtracking below can follow a backpointer to
+    // hyp-position 0 while segments remain. Pre-size row 0 so that access is
+    // in-bounds (and yields a benign 0) instead of reading an empty vector and
+    // crashing -- this happens with the legacy penalty on long merged inputs.
+    BP[0].resize(S + 1);
+    BC[0].resize(S + 1);
+    BR[0].resize(S + 1);
     std::vector<std::vector<DP>> m(R), mnew(R);
     boundary.resize(S + 1);
     sentCosts.resize(S + 1);
@@ -328,7 +337,7 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
                 } else {
                     // do compute next step in the LEVENSHTEIN distance
                     // add a large cost if this is the start of sentence and the word is internal
-                    float extra_cost = (segmenting && is_new_sent && isInternal(hyp_ids[j - 1]) ? 1000 : 0);
+                    float extra_cost = ((segmenting || legacyPenalty_) && is_new_sent && isInternal(hyp_ids[j - 1]) ? 1000 : 0);
 
                     del = mnew[r][0].cost + getDeletionCosts(ref_ids[r][i - 1]) + extra_cost;
                     ins = m[r][i].cost + getInsertionCosts(hyp_ids[j - 1]) +

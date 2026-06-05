@@ -72,6 +72,11 @@ class MwerSegmenter
     bool usecase;
     bool referencesAreOk;
     bool segmenting;
+    // TEMPORARY: when true, restore the pre-fix (paper) behavior where the
+    // segment-initial "internal word" penalty fires regardless of the
+    // segmenting flag. Used to reproduce results produced before the
+    // untokenized-alignment fix. See setLegacyPenalty().
+    bool legacyPenalty_;
 
     const std::string underscoreWord = "▁";
 
@@ -99,7 +104,7 @@ class MwerSegmenter
   public:
     MwerSegmenter()
         : maxER_(-1), human_(false), ins_(1), del_(1), refLength_(0), vocCounter_(0), usecase(false),
-          referencesAreOk(false), segmenting(false)
+          referencesAreOk(false), segmenting(false), legacyPenalty_(false)
     {
         fillPunctuationSet();
     }
@@ -128,6 +133,14 @@ class MwerSegmenter
      * \param b \em true: Tokenize \b references \em false: do not tokenize references
      **/
     void setsegmenting(bool s) { segmenting = s; }
+
+    /** TEMPORARY: restore the pre-fix penalty behavior.
+     * When enabled, the segment-initial "internal word" penalty is applied even
+     * for untokenized (whitespace) input, reproducing results generated before
+     * the alignment fix. Off by default.
+     * \param b \em true: apply the penalty unconditionally (legacy/paper behavior)
+     **/
+    void setLegacyPenalty(bool b) { legacyPenalty_ = b; }
 
     /** Load reference sentences from file in mref format
      * (i.e. multiple refererences separated by a '#' in each line)
