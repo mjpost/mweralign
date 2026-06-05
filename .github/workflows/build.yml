@@ -23,6 +23,35 @@ jobs:
       - name: Run test suite
         run: python -m pytest python/tests -v
 
+  cmake_build:
+    name: CMake CLI build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zlib (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Smoke-test the CLI
+        run: |
+          ./build/mwerAlign \
+            -r test/data/wmt22.en-de.en \
+            -t test/data/wmt22.en-de.sys \
+            -o aligned.txt
+          test -s aligned.txt
+
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     needs: [test]
