@@ -57,7 +57,7 @@ languages, it has no effect.
       bindings/          # pybind11 bindings (mweralign._mweralign)
       tests/             # pytest unit + regression suite
         regression/      # golden-file CLI regression cases
-    CMakeLists.txt       # builds the standalone C++ `mwerAlign` binary
+    CMakeLists.txt       # builds the standalone C++ `mweralign` binary
     setup.py / pyproject.toml  # builds the Python package/extension
 
 ## Development
@@ -85,11 +85,11 @@ To add a new case, create a directory under `python/tests/regression/`, add a
 ### Building the standalone C++ CLI
 
 The Python package builds its own extension, so this is only needed if you want
-the standalone `mwerAlign` binary:
+the standalone `mweralign` binary:
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build
-    # binary at build/mwerAlign
+    # binary at build/mweralign
 
 ## Citation
 

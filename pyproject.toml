@@ -13,12 +13,11 @@ include = ["mweralign*"]
 namespaces = true
 
 [tool.cibuildwheel]
-build = "cp310-* cp311-* cp312-* cp313-*"
+build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 # Skip problematic platforms
 skip = [
     "*-win32",           # Skip 32-bit Windows
     "*-manylinux_i686",  # Skip 32-bit Linux
-    "pp*",               # Skip PyPy (C++ compatibility issues)
 ]
 
 # Ensure we get manylinux2014 wheels (widely compatible)
@@ -29,18 +28,9 @@ manylinux-aarch64-image = "manylinux2014"
 test-requires = "pytest"
 test-command = "pytest {project}/python/tests"
 
-[tool.cibuildwheel.linux]
-before-all = "yum install -y cmake3 || apt-get update && apt-get install -y cmake"
-
-[tool.cibuildwheel.macos]
-before-all = "brew install cmake || true"
-
-[tool.cibuildwheel.windows]
-before-all = "choco install cmake || true"
-
 [project]
 name = "mweralign"
-version = "1.0.0"
+version = "1.1.0"
 description = "Minimum Word Error Rate Alignment for speech recognition evaluation"
 authors = [{name = "Matt Post", email = "mattpost@microsoft.com"}]
 readme = "README.md"

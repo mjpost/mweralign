@@ -37,6 +37,7 @@ ext_modules = [
             "src/",
             pybind11.get_include(),
         ],
+        libraries=["z"],
         language="c++",
         cxx_std=17,
     ),

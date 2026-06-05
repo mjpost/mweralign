@@ -1,4 +1,4 @@
-# Makefile for mwerAlign
+# Makefile for mweralign
 #
 #   make           # build the standalone C++ CLI (default)
 #   make python    # build/install the Python package (editable, with dev deps)

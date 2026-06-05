@@ -187,7 +187,7 @@ unsigned int MwerSegmenter::getVocIndex(const std::string &word) const
 /*
  * Return the vocabulary word given an ID.
  */
-std::string MwerSegmenter::getVocWord(const uint id) const
+std::string MwerSegmenter::getVocWord(const unsigned int id) const
 {
     std::map<unsigned int, std::string>::const_iterator p = voc_id_to_word_map_.find(id);
     if (p != voc_id_to_word_map_.end())
@@ -198,7 +198,7 @@ std::string MwerSegmenter::getVocWord(const uint id) const
 /*
  * Substitution cost.
  */
-unsigned int MwerSegmenter::getSubstitutionCosts(const uint a, const uint b) const
+unsigned int MwerSegmenter::getSubstitutionCosts(const unsigned int a, const unsigned int b) const
 {
     if (a == b)
         return 0;
@@ -214,7 +214,7 @@ unsigned int MwerSegmenter::getSubstitutionCosts(const uint a, const uint b) con
     return 1;
 }
 
-unsigned int MwerSegmenter::getDeletionCosts(const uint w) const
+unsigned int MwerSegmenter::getDeletionCosts(const unsigned int w) const
 {
     /** additional costs for deletion if the word is a punctuation **/
     if (!human_ || (punctuationSet_.find(w) == punctuationSet_.end()))
@@ -223,7 +223,7 @@ unsigned int MwerSegmenter::getDeletionCosts(const uint w) const
         return 2;
 }
 
-unsigned int MwerSegmenter::getInsertionCosts(const uint w) const
+unsigned int MwerSegmenter::getInsertionCosts(const unsigned int w) const
 {
     /** additional costs for insertion if the word is a punctuation **/
     if (!human_ || (punctuationSet_.find(w) == punctuationSet_.end()))
@@ -238,7 +238,7 @@ unsigned int MwerSegmenter::getInsertionCosts(const uint w) const
  *
  * TODO(MJP): generalize
  */
-bool MwerSegmenter::isInternal(const uint w) const
+bool MwerSegmenter::isInternal(const unsigned int w) const
 {
     // get the first character of the word and compare it to underscoreWord
     std::string word = getVocWord(w);
@@ -249,8 +249,8 @@ bool MwerSegmenter::isInternal(const uint w) const
     return result;
 }
 
-unsigned int MwerSegmenter::additionalInsertionCosts(const uint ref_next, const uint ref_prev, bool is_new_sent,
-                                                     const uint w) const
+unsigned int MwerSegmenter::additionalInsertionCosts(const unsigned int ref_next, const unsigned int ref_prev, bool is_new_sent,
+                                                     const unsigned int w) const
 {
     // large cost if we're putting an internal word at the start of a sentence
     if (is_new_sent && isInternal(w)) {
