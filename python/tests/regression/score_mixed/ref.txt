@@ -1,0 +1,4 @@
+The Quick Brown Fox
+jumps over the lazy dog
+this whole line is dropped
+perfect match here

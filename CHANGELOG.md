@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-05
+
+### Added
+- Scoring mode (`--score`): treats the reference and hypothesis as already
+  aligned line-by-line and reports per-segment and corpus word error rate (WER)
+  instead of re-segmenting. Honors the existing tokenizer (`--tokenizer`) and is
+  case-insensitive, consistent with the aligner. Exposes `score_tokens()` and
+  `wer()` helpers in the public API.
+
 ## [1.1.1] - 2026-06-05
 
 ### Fixed
