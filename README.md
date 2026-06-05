@@ -97,30 +97,8 @@ If you use this package, please cite the following two papers. We suggest a sent
 similar to the following: "To align the text, we used the mweralign package \citep{post-huang-2025-effects},
 which implements a variant of the AS-WER algorithm \citep{matusov-etal-2005-evaluating}.
 
-> @inproceedings{post-hoang-2025-effects,
->    title = "Effects of automatic alignment on speech translation metrics",
->    author = "Post, Matt and Hoang, Hieu",
->    editor = "Salesky, Elizabeth  and Federico, Marcello  and Anastasopoulos, Antonis",
->    booktitle = "Proceedings of the 22nd International Conference on Spoken Language Translation (IWSLT 2025)",
->    month = jul,
->    year = "2025",
->    address = "Vienna, Austria (in-person and online)",
->    publisher = "Association for Computational Linguistics",
->    url = "https://aclanthology.org/2025.iwslt-1.7/",
->    doi = "10.18653/v1/2025.iwslt-1.7",
->    pages = "84--92",
->    ISBN = "979-8-89176-272-5",
-> }
-
-> @inproceedings{matusov2005evaluating,
->   title={Evaluating machine translation output with automatic sentence segmentation},
->   author={Matusov, Evgeny and Leusch, Gregor and Bender, Oliver and Ney, Hermann},
->   booktitle={IWSLT 2005},
->   pages={138--144},
->   year={2005}
-> }
-> }
-
+- [Matusov et al. (2005)](https://aclanthology.org/2005.iwslt-1.19/)
+- [Post and Hoang (2025)](https://aclanthology.org/2025.iwslt-1.7/)
 
 ## License
 
