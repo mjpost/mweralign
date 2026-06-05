@@ -28,6 +28,15 @@ _META_FIELDS = {"src", "docid", "origlang", "domain"}
 # flores200 SPM model downloaded/cached by sacrebleu; reused for mweralign ``-m``.
 FLORES_MODEL = Path.home() / ".sacrebleu" / "models" / "flores200sacrebleuspm"
 
+# Custom multilingual SentencePiece models trained for the paper (Oscar corpus,
+# identity normalization -> character-preserving, unlike flores200). Override the
+# directory with MWERALIGN_SPM_DIR. Available vocab sizes: 32000/64000/128000/256000.
+SPM_DIR = Path(
+    __import__("os").environ.get(
+        "MWERALIGN_SPM_DIR", "/Users/post/src/mweralign/expt/data"
+    )
+)
+
 
 def _dataset():
     return sacrebleu.DATASETS[TESTSET]
@@ -110,6 +119,22 @@ def flores_model() -> Path:
             "Flores200Tokenizer; Flores200Tokenizer()('x')\""
         )
     return FLORES_MODEL
+
+
+def spm_model(vocab_size: int = 256000) -> Path:
+    """Path to a custom identity-normalization SPM model (paper models).
+
+    These use ``--normalization_rule_name identity`` so the character stream is
+    preserved through tokenization, unlike flores200.
+    """
+    path = SPM_DIR / f"{vocab_size}.model"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"custom SPM model not found at {path}.\n"
+            "Set MWERALIGN_SPM_DIR to the directory holding {32000,64000,"
+            "128000,256000}.model (see scripts/spm-train.sh for the recipe)."
+        )
+    return path
 
 
 def domain_groups(domain_labels: List[str]) -> Dict[str, List[int]]:

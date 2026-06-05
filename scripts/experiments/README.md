@@ -43,6 +43,37 @@ source venv/bin/activate           # has mweralign + sacrebleu installed
   export GEMBOID_CMD="python /path/to/gemboid.py --src {src} --hyp {hyp} --ref {ref}"
   ```
 
+## SentencePiece models
+
+Two SPM segmenters are available:
+
+- **`flores200`** — the 256k multilingual model sacrebleu caches at
+  `~/.sacrebleu/models/flores200sacrebleuspm`. Note it applies minor NMT-style
+  normalization, so it **rewrites characters** and is *not* suitable for the
+  segmentation-restoration check (the non-space character stream is not
+  preserved).
+- **`spm`** — the paper's custom multilingual models, trained on the Oscar
+  corpus with `--normalization_rule_name identity` (normalization off), so the
+  character stream is preserved through tokenization. Available vocab sizes:
+  `32000`, `64000`, `128000`, `256000` (the `spm` segmenter uses 256k).
+
+  The trained models are **not** committed to this repo. They live on the
+  internal cluster at:
+
+  ```
+  gpu8:/mnt/westus2/hieu/workspace/experiment/speech/multiling/identity/*
+  ```
+
+  Copy them locally (e.g. `scp 'gpu8:.../identity/*' <dir>`) and point the
+  harness at the directory holding the `*.model` files:
+
+  ```bash
+  export MWERALIGN_SPM_DIR=/path/to/identity   # default: /Users/post/src/mweralign/expt/data
+  ```
+
+  The training recipe (exact `spm_train` invocation) is in
+  [`scripts/spm-train.sh`](../spm-train.sh).
+
 ## Usage
 
 ```bash
@@ -60,8 +91,8 @@ python -m scripts.experiments.run --metrics bleu chrf comet22 gemboid
 ```
 
 Segmenters: `none` (whitespace), `cj` (Han characters; auto-skipped for
-non-CJK targets), `flores200` (256k SPM). Results land in
-`experiments-out/results.tsv`.
+non-CJK targets), `flores200` (256k SPM, normalizing), `spm` (custom 256k SPM,
+identity normalization). Results land in `experiments-out/results.tsv`.
 
 ## Deferred: human-eval correlation
 

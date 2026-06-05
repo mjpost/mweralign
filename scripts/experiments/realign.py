@@ -34,6 +34,8 @@ SEGMENTERS = {
     "none": lambda tgt: [],
     "cj": lambda tgt: ["-m", "cj", "-l", tgt],
     "flores200": lambda tgt: ["-m", str(data.flores_model())],
+    # Custom identity-normalization SPM (paper model); character-preserving.
+    "spm": lambda tgt: ["-m", str(data.spm_model())],
 }
 
 
@@ -46,7 +48,8 @@ def segmenter_args(segmenter: str, target_language: str) -> List[str]:
 
 
 def _run_mweralign(
-    refs: List[str], merged_hyps: List[str], doc_labels: List[str], extra: List[str]
+    refs: List[str], merged_hyps: List[str], doc_labels: List[str], extra: List[str],
+    legacy_penalty: bool = False
 ) -> List[str]:
     """Invoke the mweralign CLI and return its realigned output lines."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -65,6 +68,8 @@ def _run_mweralign(
             "-r", str(ref_f), "-t", str(hyp_f), "-d", str(doc_f),
             "-o", str(out_f), *extra,
         ]
+        if legacy_penalty:
+            cmd.append("--legacy-penalty")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(
@@ -73,7 +78,8 @@ def _run_mweralign(
         return out_f.read_text(encoding="utf-8").splitlines()
 
 
-def realign_system(langpair: str, system: str, segmenter: str) -> List[str]:
+def realign_system(langpair: str, system: str, segmenter: str,
+                   legacy_penalty: bool = False) -> List[str]:
     """Return the realigned, per-segment output for one system (original order)."""
     refs = data.primary_reference(langpair)
     hyps = data.system_output(langpair, system)
@@ -98,7 +104,8 @@ def realign_system(langpair: str, system: str, segmenter: str) -> List[str]:
         merged_hyps.append(" ".join(hyps[i].strip() for i in indices))
 
     extra = segmenter_args(segmenter, data.target_language(langpair))
-    realigned = _run_mweralign(ordered_refs, merged_hyps, ordered_docids, extra)
+    realigned = _run_mweralign(ordered_refs, merged_hyps, ordered_docids, extra,
+                               legacy_penalty=legacy_penalty)
 
     if len(realigned) != len(order):
         raise RuntimeError(
