@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ubuntu-latest`.
 
 ### Fixed
+- Segmentation fault when a reference line is empty (issue #1): empty reference
+  lines are now preserved as empty segments so the segment count stays in sync
+  with the segmentation markers, preventing the backtrace from being corrupted.
+  Added an `empty_ref` regression test covering this case.
 - Build failures on macOS/Linux caused by an `operator<<` declaration ordering
   issue that broke two-phase name lookup under clang and GCC.
 - `ImportError: undefined symbol: gzwrite` when importing the Python extension:
