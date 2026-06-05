@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- WMT24 regression suite: golden-file cases built from real WMT24 data
+  (`scripts/make_wmt24_regression.py`) exercising whitespace, `cj`, and
+  flores200 segmenters, document-merged realignment (`-d`), and `--score`.
+- Experiment scaffolding under `scripts/experiments/` reproducing the data +
+  alignment + scoring pipeline from Post & Hieu (IWSLT 2025) on WMT24 for all
+  11 language pairs: data access via sacrebleu, domain-merge realignment, and
+  BLEU + chrF (sacrebleu) / COMET22 (PyMarian) / pluggable `gemboid` scoring.
+  Human-judgment correlation is deferred.
+
 ## [1.2.0] - 2026-06-05
 
 ### Added
