@@ -46,7 +46,7 @@ jobs:
 
       - name: Smoke-test the CLI
         run: |
-          ./build/mwerAlign \
+          ./build/mweralign \
             -r test/data/wmt22.en-de.en \
             -t test/data/wmt22.en-de.sys \
             -o aligned.txt

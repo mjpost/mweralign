@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(mwerAlign
-    VERSION 1.0.0
+project(mweralign
+    VERSION 1.1.0
     DESCRIPTION "Minimum Word Error Rate alignment for speech translation evaluation"
     LANGUAGES CXX)
 
@@ -20,29 +20,29 @@ option(MWERALIGN_WERROR "Treat compiler warnings as errors" OFF)
 find_package(ZLIB REQUIRED)
 
 # Core algorithm library, shared between the CLI and (potentially) other tools.
-add_library(mwerAlignLib STATIC
+add_library(mweralign_lib STATIC
     src/IOfile.cc
     src/mwerAlign.cc
     src/SimpleText2.cc
     src/gzstream.cc
 )
-target_include_directories(mwerAlignLib PUBLIC
+target_include_directories(mweralign_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(mwerAlignLib PUBLIC ZLIB::ZLIB)
-target_compile_options(mwerAlignLib PRIVATE -Wall)
+target_link_libraries(mweralign_lib PUBLIC ZLIB::ZLIB)
+target_compile_options(mweralign_lib PRIVATE -Wall)
 if(MWERALIGN_WERROR)
-    target_compile_options(mwerAlignLib PRIVATE -Werror)
+    target_compile_options(mweralign_lib PRIVATE -Werror)
 endif()
 
 # Command-line tool.
-add_executable(mwerAlign src/main.cc)
-target_link_libraries(mwerAlign PRIVATE mwerAlignLib)
+add_executable(mweralign src/main.cc)
+target_link_libraries(mweralign PRIVATE mweralign_lib)
 
-install(TARGETS mwerAlign
+install(TARGETS mweralign
     RUNTIME DESTINATION bin)
-install(TARGETS mwerAlignLib
+install(TARGETS mweralign_lib
     ARCHIVE DESTINATION lib)
 install(FILES
     src/mwerAlign.hh
