@@ -18,7 +18,6 @@ build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = [
     "*-win32",           # Skip 32-bit Windows
     "*-manylinux_i686",  # Skip 32-bit Linux
-    "pp*",               # Skip PyPy (C++ compatibility issues)
 ]
 
 # Ensure we get manylinux2014 wheels (widely compatible)
@@ -28,15 +27,6 @@ manylinux-aarch64-image = "manylinux2014"
 # Smoke-test each built wheel against the regression suite.
 test-requires = "pytest"
 test-command = "pytest {project}/python/tests"
-
-[tool.cibuildwheel.linux]
-before-all = "yum install -y cmake3 || apt-get update && apt-get install -y cmake"
-
-[tool.cibuildwheel.macos]
-before-all = "brew install cmake || true"
-
-[tool.cibuildwheel.windows]
-before-all = "choco install cmake || true"
 
 [project]
 name = "mweralign"
