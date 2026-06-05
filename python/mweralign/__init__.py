@@ -18,5 +18,5 @@ limitations under the License.
 
 from .mweralign import MwerAlign, align_texts, score_tokens, wer
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 __all__ = ["MwerAlign", "align_texts", "score_tokens", "wer"]
