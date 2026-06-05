@@ -252,8 +252,13 @@ bool MwerSegmenter::isInternal(const unsigned int w) const
 unsigned int MwerSegmenter::additionalInsertionCosts(const unsigned int ref_next, const unsigned int ref_prev, bool is_new_sent,
                                                      const unsigned int w) const
 {
-    // large cost if we're putting an internal word at the start of a sentence
-    if (is_new_sent && isInternal(w)) {
+    // large cost if we're putting an internal word at the start of a sentence.
+    // This only makes sense when the input is tokenized (e.g. with SentencePiece),
+    // where word-internal pieces lack the leading marker. With plain whitespace
+    // input every word looks "internal" (isInternal() == true), so without the
+    // segmenting guard this penalty would fire on every segment-initial insertion
+    // and corrupt the alignment.
+    if (segmenting && is_new_sent && isInternal(w)) {
         return 1000;
     }
 

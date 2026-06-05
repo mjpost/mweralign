@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-06-05
+
+### Fixed
+- Incorrect segmentation for plain (non-tokenized) input: the word-internal
+  "don't start a segment with an internal piece" penalty in
+  `additionalInsertionCosts` was applied unconditionally. Because `isInternal()`
+  treats every whitespace word as internal (no leading `▁` marker), the 1000-cost
+  penalty fired on every segment-initial insertion, forcing trailing tokens into
+  the wrong segment and yielding suboptimal alignments. The penalty is now gated
+  by the `segmenting` flag (consistent with the sibling `extra_cost` term), so it
+  only applies in SentencePiece/tokenized mode. Added a `whitespace_segment`
+  regression test covering this case.
+- `mweralign` CLI now requires `--ref-file/-r` and `--hyp-file/-t`, printing a
+  usage error instead of crashing with `AttributeError: 'NoneType' object has no
+  attribute 'readlines'` when run with no arguments.
+
 ## [1.1.0] - 2026-06-04
 
 ### Added
