@@ -28,17 +28,18 @@ ext_modules = [
         "mweralign._mweralign",
         [
             "src/mwerAlign.cc",
-            "src/SimpleText2.cc",  # Add other necessary C++ files
+            "src/SimpleText2.cc",
             "src/IOfile.cc",
             "src/gzstream.cc",
-            "bindings/bindings.cpp",  # New bindings file
+            "python/bindings/bindings.cpp",
         ],
         include_dirs=[
             "src/",
             pybind11.get_include(),
         ],
-        language='c++',
-        cxx_std=11,
+        libraries=["z"],
+        language="c++",
+        cxx_std=17,
     ),
 ]
 

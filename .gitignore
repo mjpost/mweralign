@@ -1,4 +1,23 @@
+# Build outputs
 build*/
+dist/
+wheelhouse/
 *.o
 *.a
+*.so
+
+# Python
+__pycache__/
+*.egg-info/
 *.egg-info
+
+# Virtual environments
+test_env/
+venv/
+.venv/
+
+# Editor
+.vscode/
+
+# Regression test scratch output
+python/tests/regression/*/actual.txt

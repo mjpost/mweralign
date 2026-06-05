@@ -87,14 +87,14 @@ class MwerSegmenter
     double computeSpecialWER(const std::vector<std::vector<unsigned int>> &ref_ids,
                              const std::vector<unsigned int> &hyp_ids, unsigned int nSegments) const;
     unsigned int getVocIndex(const std::string &word) const;
-    std::string getVocWord(const uint id) const;
+    std::string getVocWord(const unsigned int id) const;
 
-    unsigned int getSubstitutionCosts(const uint a, const uint b) const;
-    unsigned int getInsertionCosts(const uint w) const;
-    unsigned int additionalInsertionCosts(const uint, const uint, bool, const uint) const;
-    unsigned int getDeletionCosts(const uint w) const;
+    unsigned int getSubstitutionCosts(const unsigned int a, const unsigned int b) const;
+    unsigned int getInsertionCosts(const unsigned int w) const;
+    unsigned int additionalInsertionCosts(const unsigned int, const unsigned int, bool, const unsigned int) const;
+    unsigned int getDeletionCosts(const unsigned int w) const;
     void fillPunctuationSet();
-    bool isInternal(const uint w) const;
+    bool isInternal(const unsigned int w) const;
 
   public:
     MwerSegmenter()

@@ -71,6 +71,24 @@ inline Sentence makeSent(const std::string &s)
     return rv;
 }
 
+}; // namespace TextNS
+
+// These stream operators must be declared before the read/write templates below
+// so that two-phase name lookup (e.g. under clang) can resolve them, since the
+// operators live in the global namespace while their argument types are aliases
+// for std:: containers and therefore won't be found via ADL.
+std::istream &operator>>(std::istream &in, TextNS::Sentence &x);
+std::ostream &operator<<(std::ostream &out, const TextNS::Sentence &x);
+
+std::ostream &operator<<(std::ostream &out, const TextNS::VectorText &x);
+std::istream &operator>>(std::istream &in, TextNS::VectorText &x);
+
+std::ostream &operator<<(std::ostream &out, const TextNS::DequeText &x);
+std::istream &operator>>(std::istream &in, TextNS::DequeText &x);
+
+namespace TextNS
+{
+
 template <class T> void read(const std::string &fn, T &x)
 {
     if (fn == std::string("stdin"))
@@ -111,15 +129,6 @@ template <class T> void write(std::ostream &out, const T &x)
 }
 
 }; // namespace TextNS
-
-std::istream &operator>>(std::istream &in, TextNS::Sentence &x);
-std::ostream &operator<<(std::ostream &out, const TextNS::Sentence &x);
-
-std::ostream &operator<<(std::ostream &out, const TextNS::VectorText &x);
-std::istream &operator>>(std::istream &in, TextNS::VectorText &x);
-
-std::ostream &operator<<(std::ostream &out, const TextNS::DequeText &x);
-std::istream &operator>>(std::istream &in, TextNS::DequeText &x);
 
 inline TextNS::Sentence &operator+=(TextNS::Sentence &a, const TextNS::Sentence &b)
 {
