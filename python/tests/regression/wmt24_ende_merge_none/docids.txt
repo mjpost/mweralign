@@ -1,0 +1,8 @@
+test-en-news_beverly_press.3585
+test-en-news_beverly_press.3585
+test-en-news_brisbanetimes.com.au.228963
+test-en-news_csmonitor.com.7750
+test-en-news_csmonitor.com.7750
+test-en-news_economist.14223
+test-en-news_euronews-en.43091
+test-en-news_newsrepublic.com.6817
