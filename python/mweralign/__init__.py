@@ -18,5 +18,5 @@ limitations under the License.
 
 from .mweralign import MwerAlign, align_texts
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __all__ = ["MwerAlign", "align_texts"]
