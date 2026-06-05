@@ -33,14 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that failed against the now-EOL CentOS 7 (`manylinux2014`) package repos; the
   package builds with pybind11/setuptools and does not require system CMake.
 
-## [1.0.1]
+## [1.0.1] - 2025-07-23
 
-Initial PyPI maintenance release.
+### Fixed
+- Packaging/publishing fixes for the initial PyPI release (build metadata for
+  publishing and license keywords).
 
 ## [1.0.0]
 
-Initial release.
+Initial release: the original RWTH MWERAlign C++ library (AS-WER algorithm)
+packaged as a pip-installable Python package with pybind11 bindings, a
+`mweralign` command-line entry point and Python API, CJ/SentencePiece
+segmenter support, a regression test suite, and GitHub Actions builds.
 
 [1.1.0]: https://github.com/mjpost/mweralign/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mjpost/mweralign/releases/tag/v1.0.1
-[1.0.0]: https://github.com/mjpost/mweralign/releases/tag/v1.0.0
+[1.0.0]: https://pypi.org/project/mweralign/1.0.0/
