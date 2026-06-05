@@ -119,8 +119,8 @@ def main():
     import sys
     
     parser = argparse.ArgumentParser(description='Minimum Word Error Rate Alignment')
-    parser.add_argument('--ref-file', "-r", type=argparse.FileType("r"), help='Reference text or file')
-    parser.add_argument('--hyp-file', "-t", type=argparse.FileType("r"), help='Hypothesis text or file')
+    parser.add_argument('--ref-file', "-r", type=argparse.FileType("r"), required=True, help='Reference text or file')
+    parser.add_argument('--hyp-file', "-t", type=argparse.FileType("r"), required=True, help='Hypothesis text or file')
     parser.add_argument("--docid-file", "-d", type=argparse.FileType("r"), default=None, help="Docid file")
     parser.add_argument('--output', '-o', type=argparse.FileType("w"), default=sys.stdout,
                         help='Output file (default: stdout)')
