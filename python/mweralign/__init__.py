@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from .mweralign import MwerAlign, align_texts
+from .mweralign import MwerAlign, align_texts, score_tokens, wer
 
 __version__ = "1.1.1"
-__all__ = ["MwerAlign", "align_texts"]
+__all__ = ["MwerAlign", "align_texts", "score_tokens", "wer"]

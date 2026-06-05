@@ -56,7 +56,6 @@ class MwerAlign:
             Aligned result string
         """
         return self._segmenter.mwerAlign(reference, hypothesis)
-
     def load_references(self, references: str) -> bool:
         """
         Load reference text from string.
@@ -113,6 +112,74 @@ def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False) -> 
     return aligner.align(reference, hypothesis)
 
 
+def score_tokens(ref_tokens: List[str], hyp_tokens: List[str]) -> Tuple[int, int, int]:
+    """
+    Compute word-level edit counts between a reference and a hypothesis.
+
+    Uses a standard Levenshtein alignment with unit substitution, insertion,
+    and deletion costs (matching the default cost model of the C++ aligner).
+    Substitutions are preferred over insert+delete on ties so the counts are
+    well defined.
+
+    Args:
+        ref_tokens: Reference tokens
+        hyp_tokens: Hypothesis tokens
+
+    Returns:
+        Tuple of (substitutions, insertions, deletions).
+    """
+    n, m = len(ref_tokens), len(hyp_tokens)
+    # cost[i][j] = (total_cost, subs, ins, dels) aligning ref[:i] with hyp[:j]
+    prev = [(j, 0, j, 0) for j in range(m + 1)]
+    for i in range(1, n + 1):
+        curr = [(i, 0, 0, i)] + [(0, 0, 0, 0)] * m
+        for j in range(1, m + 1):
+            match = ref_tokens[i - 1] == hyp_tokens[j - 1]
+            sub_cost, sub_s, sub_i, sub_d = prev[j - 1]
+            sub = (sub_cost + (0 if match else 1), sub_s + (0 if match else 1), sub_i, sub_d)
+            del_cost, del_s, del_i, del_d = prev[j]
+            dele = (del_cost + 1, del_s, del_i, del_d + 1)
+            ins_cost, ins_s, ins_i, ins_d = curr[j - 1]
+            ins = (ins_cost + 1, ins_s, ins_i + 1, ins_d)
+            # Prefer substitution/match, then deletion, then insertion on ties.
+            best = sub
+            if dele[0] < best[0]:
+                best = dele
+            if ins[0] < best[0]:
+                best = ins
+            curr[j] = best
+        prev = curr
+    _, subs, ins, dels = prev[m]
+    return subs, ins, dels
+
+
+def wer(reference: str, hypothesis: str, lowercase: bool = True) -> float:
+    """
+    Compute the word error rate (WER) between two whitespace-tokenized strings.
+
+    Args:
+        reference: Reference string
+        hypothesis: Hypothesis string
+        lowercase: Lowercase both sides before comparison (default: True,
+            matching the aligner's case-insensitive behavior).
+
+    Returns:
+        WER as a fraction of the reference length. An empty reference yields
+        0.0 when the hypothesis is also empty, otherwise the number of
+        inserted tokens (so the metric stays defined).
+    """
+    if lowercase:
+        reference = reference.lower()
+        hypothesis = hypothesis.lower()
+    ref_tokens = reference.split()
+    hyp_tokens = hypothesis.split()
+    subs, ins, dels = score_tokens(ref_tokens, hyp_tokens)
+    errors = subs + ins + dels
+    if not ref_tokens:
+        return 0.0 if not hyp_tokens else float(errors)
+    return errors / len(ref_tokens)
+
+
 def main():
     """Command-line interface for mweralign."""
     import argparse
@@ -127,6 +194,9 @@ def main():
     parser.add_argument('--tokenizer', '-m', type=str, default=None, help="Tokenizer to use (path to model or keyword 'cj')")
     parser.add_argument("--language", "-l", default=None, help="Language being aligned (e.g, en)")
     parser.add_argument("--no-detok", action="store_true", default=False)
+    parser.add_argument("--score", action="store_true", default=False,
+                        help="Scoring mode: ref and hyp are already aligned line-by-line; "
+                             "report per-segment and corpus WER instead of aligning.")
     args = parser.parse_args()
 
     refs = [line.strip() for line in args.ref_file.readlines()]
@@ -158,6 +228,36 @@ def main():
                 else:
                     text[i] = " ".join(segmenter.encode(text[i].strip()))
         return "\n".join(text)
+
+    if args.score:
+        if len(refs) != len(hyps):
+            logger.info(f"Error: --score requires parallel input, but got {len(refs)} "
+                        f"reference lines and {len(hyps)} hypothesis lines.")
+            sys.exit(1)
+
+        def tokenize_line(line: str) -> str:
+            if segmenter is None:
+                return line
+            return " ".join(segmenter.encode(line.strip()))
+
+        total_errors = 0
+        total_ref_words = 0
+        for i, (ref, hyp) in enumerate(zip(refs, hyps), start=1):
+            ref_tok = tokenize_line(ref)
+            hyp_tok = tokenize_line(hyp)
+            subs, ins, dels = score_tokens(ref_tok.lower().split(), hyp_tok.lower().split())
+            errors = subs + ins + dels
+            n = len(ref_tok.split())
+            total_errors += errors
+            total_ref_words += n
+            seg_wer = 100.0 * errors / n if n else (0.0 if errors == 0 else float("inf"))
+            print(f"segment {i}: WER={seg_wer:.2f} (S={subs} I={ins} D={dels} N={n})",
+                  file=args.output)
+
+        corpus_wer = 100.0 * total_errors / total_ref_words if total_ref_words else 0.0
+        print(f"TOTAL: WER={corpus_wer:.2f} (errors={total_errors} ref_words={total_ref_words})",
+              file=args.output)
+        return
 
     docids = []
     if not args.docid_file:
