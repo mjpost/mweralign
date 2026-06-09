@@ -7,6 +7,14 @@
 #include <iostream>
 #include <sstream>
 
+// Branch hint so the opt-in trace checks in the hot DP loop are statically
+// predicted not-taken and cost effectively nothing when tracing is disabled.
+#if defined(__GNUC__) || defined(__clang__)
+#define MWER_UNLIKELY(x) (__builtin_expect(!!(x), 0))
+#else
+#define MWER_UNLIKELY(x) (x)
+#endif
+
 using namespace std;
 
 std::istream &operator>>(std::istream &in, Text &x);
@@ -249,6 +257,26 @@ bool MwerSegmenter::isInternal(const unsigned int w) const
     return result;
 }
 
+/**
+ * Whether a piece is a word-internal *word* fragment: internal (lacks the
+ * leading word marker) AND not pure punctuation. Pure-punctuation pieces (e.g.
+ * ".", "...", ".\"") legitimately attach to the previous token and are not the
+ * mid-word cuts the boundary constraint targets, so they are excluded.
+ */
+bool MwerSegmenter::isInternalWord(const unsigned int w) const
+{
+    if (!isInternal(w))
+        return false;
+    const std::string word = getVocWord(w);
+    for (unsigned char c : word) {
+        // A non-ASCII byte (a multibyte letter/CJK char) or an ASCII
+        // alphanumeric means this piece carries word material.
+        if (c >= 128 || std::isalnum(c))
+            return true;
+    }
+    return false; // all bytes are ASCII punctuation/symbols
+}
+
 unsigned int MwerSegmenter::additionalInsertionCosts(const unsigned int ref_next, const unsigned int ref_prev, bool is_new_sent,
                                                      const unsigned int w) const
 {
@@ -296,6 +324,13 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
 
     if (J == 0)
         return 0;
+
+    if (MWER_UNLIKELY(collectTrace_)) {
+        traceCells_.clear();
+        traceBC_.clear();
+        traceBP_.clear();
+        traceBR_.clear();
+    }
 
     for (size_t r = 0; r < R; ++r) { // initialization along reference axis i for all references
         m[r].resize(I + 1);
@@ -365,6 +400,21 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
                     }
                     m[r][i - 1] = mnew[r][0]; // finalize saving of the previous entry
                     mnew[r][0] = mnew[r][1];  // move the current entry up the stack
+
+                    if (MWER_UNLIKELY(collectCells_)) {
+                        // Re-derive the chosen edit op using the same priority
+                        // (substitution preferred, then deletion on a tie with
+                        // insertion) so the trace matches the selection above.
+                        char op;
+                        if (sub < del)
+                            op = (sub < ins) ? 'S' : 'I';
+                        else
+                            op = (del <= ins) ? 'D' : 'I';
+                        traceCells_.push_back(CellCost{
+                            (unsigned int)j, (unsigned int)i, (unsigned int)r,
+                            del, ins, sub, mnew[r][1].cost,
+                            (unsigned int)extra_cost, op, is_new_sent});
+                    }
                 }
                 if (merge)
                     // segmentation word is the same in all references
@@ -391,6 +441,16 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
         for (size_t r = 0; r < R; ++r) {
             m[r][I] = mnew[r][0]; // make the stack empty by filling in the last values
         }
+    }
+
+    if (MWER_UNLIKELY(collectTrace_)) {
+        // Snapshot the full boundary DP tables so callers can inspect every
+        // competing segment end (not just the one the backtrace selects).
+        traceBC_ = BC;
+        traceBP_ = BP;
+        traceBR_.assign(BR.size(), std::vector<unsigned int>());
+        for (size_t jj = 0; jj < BR.size(); ++jj)
+            traceBR_[jj].assign(BR[jj].begin(), BR[jj].end());
     }
 
     // Backtracing from here:

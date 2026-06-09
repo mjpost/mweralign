@@ -46,6 +46,25 @@ class MwerSegmenter
     {
     };
 
+    /** A single recorded Levenshtein cell from the segmentation DP.
+     *
+     * Only populated when trace collection is enabled (see setCollectTrace()).
+     * Lets callers inspect, per hypothesis/reference position, the competing
+     * edit costs the DP considered and which one (and what penalty) it chose.
+     **/
+    struct CellCost {
+        unsigned int j;        ///< hypothesis position (1-based)
+        unsigned int i;        ///< reference position  (1-based)
+        unsigned int ref;      ///< reference index
+        unsigned int del_cost; ///< total cost of the deletion option
+        unsigned int ins_cost; ///< total cost of the insertion option
+        unsigned int sub_cost; ///< total cost of the substitution option
+        unsigned int chosen;   ///< cost of the option the DP took
+        unsigned int extra;    ///< segment-initial internal-word penalty applied here
+        char op;               ///< chosen edit: 'S', 'I' or 'D'
+        bool is_new_sent;      ///< whether this cell is at a segment start
+    };
+
   private:
     /** Init internal reference sentence structures.
      * To be called from loadRefs(), after reference sentences
@@ -88,6 +107,19 @@ class MwerSegmenter
     mutable std::set<unsigned int> punctuationSet_;
     mutable std::vector<unsigned int> boundary;
     mutable std::vector<unsigned int> sentCosts;
+
+    // --- Optional alignment trace (opt-in; zero overhead when disabled) ---
+    // When collectTrace_ is false the DP touches none of the storage below and
+    // pays only a single (statically predicted-not-taken) branch per cell.
+    // Boundary tables are O(J*S) and cheap; per-cell costs are O(J*I*R) and are
+    // gated behind the separate collectCells_ flag so the boundary trace stays
+    // usable on real (long) inputs.
+    mutable bool collectTrace_ = false;
+    mutable bool collectCells_ = false;
+    mutable std::vector<std::vector<unsigned int>> traceBC_; ///< BC[j][s]: best cost ending segment s at hyp pos j
+    mutable std::vector<std::vector<unsigned int>> traceBP_; ///< BP[j][s]: backpointer (end of segment s-1)
+    mutable std::vector<std::vector<unsigned int>> traceBR_; ///< BR[j][s]: best reference index
+    mutable std::vector<CellCost> traceCells_;               ///< per-cell edit costs (large; debug-only)
 
     double computeSpecialWER(const std::vector<std::vector<unsigned int>> &ref_ids,
                              const std::vector<unsigned int> &hyp_ids, unsigned int nSegments) const;
@@ -141,6 +173,55 @@ class MwerSegmenter
      * \param b \em true: apply the penalty unconditionally (legacy/paper behavior)
      **/
     void setLegacyPenalty(bool b) { legacyPenalty_ = b; }
+
+    /** Enable or disable collection of the alignment trace.
+     *
+     * When enabled, the next call to evaluate()/mwerAlign() records the full
+     * boundary DP table (cost, backpointer and best reference for every
+     * candidate segment end) and every Levenshtein cell's competing costs.
+     * Disabled by default; when disabled the DP pays no measurable cost.
+     * \param b \em true: collect the trace; \em false: do not (default)
+     **/
+    void setCollectTrace(bool b) { collectTrace_ = b; }
+
+    /** \return whether trace collection is currently enabled **/
+    bool collectTrace() const { return collectTrace_; }
+
+    /** Enable or disable per-cell cost recording.
+     *
+     * Per-cell costs are O(J*I*R) and only meaningful for small/diagnostic
+     * inputs; the boundary tables (O(J*S)) are recorded whenever
+     * setCollectTrace(true) is set, independent of this flag. Disabled by
+     * default.
+     * \param b \em true: also record every Levenshtein cell's costs
+     **/
+    void setCollectCells(bool b) { collectCells_ = b; }
+
+    /** \return whether per-cell cost recording is currently enabled **/
+    bool collectCells() const { return collectCells_; }
+
+    /** Boundary cost table from the last traced alignment: BC[j][s] is the best
+     * total cost of a segmentation that ends segment \c s at hypothesis
+     * position \c j. Empty unless setCollectTrace(true) was set. **/
+    const std::vector<std::vector<unsigned int>> &traceBoundaryCost() const { return traceBC_; }
+
+    /** Boundary backpointer table: BP[j][s] is the hypothesis position at which
+     * segment \c s-1 ends in the best segmentation ending segment \c s at \c j. **/
+    const std::vector<std::vector<unsigned int>> &traceBoundaryBP() const { return traceBP_; }
+
+    /** Best-reference table: BR[j][s] is the reference index chosen for the
+     * segment ending at \c j with segment count \c s. **/
+    const std::vector<std::vector<unsigned int>> &traceBoundaryRef() const { return traceBR_; }
+
+    /** Per-cell edit costs recorded during the last traced alignment. **/
+    const std::vector<CellCost> &traceCells() const { return traceCells_; }
+
+    /** Chosen segment boundaries from the last alignment: boundary[s] is the
+     * hypothesis position at which segment \c s-1 ends. **/
+    const std::vector<unsigned int> &boundaries() const { return boundary; }
+
+    /** Cumulative segment costs from the last alignment. **/
+    const std::vector<unsigned int> &segmentCosts() const { return sentCosts; }
 
     /** Load reference sentences from file in mref format
      * (i.e. multiple refererences separated by a '#' in each line)

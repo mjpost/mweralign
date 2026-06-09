@@ -21,3 +21,5 @@ venv/
 
 # Regression test scratch output
 python/tests/regression/*/actual.txt
+
+expt/data/
