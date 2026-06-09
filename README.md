@@ -49,6 +49,54 @@ languages, it has no effect.
 
     mweralign -r ref.txt -h hyp.txt -o aligned.txt -t cj -l zh
 
+When a SentencePiece model is used to tokenize a non-CJK language, the aligner also forbids
+*mid-word* segment boundaries: no output segment may begin on a word-internal sub-word piece
+(one lacking the leading `▁` marker), so re-segmenting never splits a word across two segments.
+This is automatic and requires no flag. Pure-punctuation pieces are exempt, since they
+legitimately attach to the preceding token.
+
+### Inspecting the segmentation scores
+
+The aligner chooses where to split the hypothesis stream with a dynamic program. You can dump
+the competing segment-boundary costs it considered with `--trace-file`. Pass `-` to write the
+trace to stdout, or a path to write it to a file. It is off by default and adds no cost when
+unused.
+
+    printf 'the cat sat\non the mat\n' > /tmp/ref.txt
+    printf 'the cat\nsat on the mat\n' > /tmp/hyp.txt
+    mweralign -r /tmp/ref.txt -t /tmp/hyp.txt -o /dev/null --trace-file - 2>/dev/null
+
+Or for a longer example:
+
+    mweralign % mweralign \
+      -r test/data/wmt22.en-de.en \
+      -t test/data/wmt22.en-de.sys \
+      -m expt/data/256000.model \
+      -l de \
+      -o /dev/null \
+      --trace-file -
+
+For each segment, the trace lists the chosen end position and every candidate end position with
+its cost and the previous segment's end (`prev_end`):
+
+    # docid range 0 (segments 0-2)
+    segment 1: chosen end j=3 (cost=0)
+        end j=   0  cost=     0  prev_end=0
+        end j=   3  cost=     0  prev_end=0  <- chosen
+        end j=   2  cost=     1  prev_end=0
+        ...
+    segment 2: chosen end j=6 (cost=0)
+        end j=   6  cost=     0  prev_end=3  <- chosen
+        ...
+
+Here `j` is a position in the (tokenized) hypothesis stream, so `segment 1` covers hyp tokens
+1..3 and `segment 2` covers 4..6. The alignment output itself still goes to `-o` (sent to
+`/dev/null` above so only the trace is shown); `2>/dev/null` suppresses the `AS-WER` line.
+
+The trace above is the boundary-cost table (cheap to record). Finer-grained per-cell edit costs
+are available only through the Python API, `align_texts_traced(..., cells=True)`, since they grow
+with the full alignment grid and are impractical to print for long inputs.
+
 ## Project layout
 
     src/                 # C++ core library and standalone CLI

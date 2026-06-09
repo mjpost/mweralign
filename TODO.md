@@ -5,6 +5,11 @@
 - [ ] Need to add special processing / weights to ensure that punctuation doesn't start a line.
 This might fit with the above in some kind of general procedure where you accomplish this with weights.
 Sounds hard.
+  - Partially addressed: for SentencePiece input the aligner now forbids mid-word
+    segment boundaries (no segment begins on a word-internal piece), which keeps
+    word fragments from starting a line. Pure punctuation is still allowed to
+    start a line (it is exempted from the constraint), so the punctuation case
+    above is not yet handled.
 
 - [X] Add docids
 If docids are provided parallel to the reference, then, under the assumption that hypotheses are one doc
