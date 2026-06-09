@@ -97,6 +97,13 @@ class MwerSegmenter
     // untokenized-alignment fix. See setLegacyPenalty().
     bool legacyPenalty_;
 
+    // When true, the segmentation DP is forbidden from placing a boundary that
+    // would start a (non-final) segment on a word-internal, non-punctuation
+    // piece -- i.e. no mid-word cuts. Opt-in; off by default. Unlike the
+    // per-cell internal-word penalty, this is a hard constraint on the
+    // segmentation boundary itself. See setForbidMidwordBoundary().
+    bool forbidMidwordBoundary_;
+
     const std::string underscoreWord = "▁";
 
     /** Container for the reference sentences **/
@@ -132,11 +139,12 @@ class MwerSegmenter
     unsigned int getDeletionCosts(const unsigned int w) const;
     void fillPunctuationSet();
     bool isInternal(const unsigned int w) const;
+    bool isInternalWord(const unsigned int w) const;
 
   public:
     MwerSegmenter()
         : maxER_(-1), human_(false), ins_(1), del_(1), refLength_(0), vocCounter_(0), usecase(false),
-          referencesAreOk(false), segmenting(false), legacyPenalty_(false)
+          referencesAreOk(false), segmenting(false), legacyPenalty_(false), forbidMidwordBoundary_(false)
     {
         fillPunctuationSet();
     }
@@ -173,6 +181,19 @@ class MwerSegmenter
      * \param b \em true: apply the penalty unconditionally (legacy/paper behavior)
      **/
     void setLegacyPenalty(bool b) { legacyPenalty_ = b; }
+
+    /** Enable or disable the hard mid-word boundary constraint.
+     *
+     * When enabled, the segmentation DP is forbidden from ending a non-final
+     * segment at a position that would start the following segment on a
+     * word-internal, non-punctuation piece (a mid-word cut). Off by default;
+     * preserves existing behavior when disabled.
+     * \param b \em true: forbid mid-word segmentation boundaries
+     **/
+    void setForbidMidwordBoundary(bool b) { forbidMidwordBoundary_ = b; }
+
+    /** \return whether the hard mid-word boundary constraint is enabled. */
+    bool forbidMidwordBoundary() const { return forbidMidwordBoundary_; }
 
     /** Enable or disable collection of the alignment trace.
      *

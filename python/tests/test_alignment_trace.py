@@ -216,5 +216,83 @@ def test_format_costs_is_readable():
     assert "chosen" in text
 
 
+# --------------------------------------------------------------------------- #
+# Hard mid-word boundary constraint
+# --------------------------------------------------------------------------- #
+
+def _segments(result):
+    return [line.split() for line in result.split("\n") if line.strip()]
+
+
+def _is_internal_word(piece):
+    """Mirror C++ isInternalWord: internal (no '▁') AND not pure punctuation."""
+    if piece.startswith("\u2581"):
+        return False
+    return any(ch.isalnum() for ch in piece)
+
+
+# (ref_segments, hyp_pieces) where the unconstrained DP makes a mid-word cut.
+MIDWORD_CASES = [
+    ("\u2581x\n\u2581y", "\u2581x y"),
+    ("\u2581the\n\u2581cat", "\u2581the cat"),
+    ("\u2581a\n\u2581b\n\u2581c", "\u2581a b c"),
+]
+
+
+@pytest.mark.parametrize("ref,hyp", MIDWORD_CASES)
+def test_constraint_forbids_midword_segment_start(ref, hyp):
+    """With the constraint on, no non-initial segment starts on an internal word piece."""
+    result, _ = align_texts_traced(
+        ref, hyp, is_tokenized=True, forbid_midword_boundary=True)
+    segments = _segments(result)
+    for seg in segments[1:]:
+        assert not _is_internal_word(seg[0]), \
+            f"segment unexpectedly starts mid-word: {seg}"
+
+
+@pytest.mark.parametrize("ref,hyp", MIDWORD_CASES)
+def test_constraint_preserves_pieces(ref, hyp):
+    """The constraint moves boundaries but never adds, drops or reorders pieces."""
+    off, _ = align_texts_traced(ref, hyp, is_tokenized=True)
+    on, _ = align_texts_traced(
+        ref, hyp, is_tokenized=True, forbid_midword_boundary=True)
+    off_segs, on_segs = _segments(off), _segments(on)
+    # The flattened piece stream is unchanged (only boundaries move; avoiding a
+    # mid-word cut may merge pieces into one segment, leaving others empty).
+    assert [p for seg in on_segs for p in seg] == \
+           [p for seg in off_segs for p in seg]
+
+
+def test_constraint_off_by_default():
+    """Without the flag, mid-word cuts are still permitted (old behavior)."""
+    ref, hyp = "\u2581the\n\u2581cat", "\u2581the cat"
+    result = align_texts(ref, hyp, is_tokenized=True)
+    segments = _segments(result)
+    # The unconstrained DP splits 'cat' into its own segment (a mid-word cut).
+    assert any(_is_internal_word(seg[0]) for seg in segments[1:])
+
+
+def test_constraint_allows_punctuation_segment_start():
+    """A pure-punctuation internal piece may still start a segment under the constraint."""
+    ref = "\u2581hi \u2581there\n. \u2581world"
+    hyp = "\u2581hi \u2581there . \u2581world"
+    result, _ = align_texts_traced(
+        ref, hyp, is_tokenized=True, forbid_midword_boundary=True)
+    segments = _segments(result)
+    # 'world' is reached via a leading-marker piece; the boundary sits at the
+    # punctuation, which is exempt, so the segmentation is still valid.
+    assert len(segments) == 2
+    assert "\u2581world" in segments[1]
+
+
+def test_constraint_ignored_for_untokenized_input():
+    """The constraint must not fire on plain whitespace input (every word looks internal)."""
+    ref, hyp = "the cat\nsat down", "the cat sat down"
+    plain = align_texts(ref, hyp, is_tokenized=False)
+    constrained = align_texts(
+        ref, hyp, is_tokenized=False, forbid_midword_boundary=True)
+    assert plain == constrained
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

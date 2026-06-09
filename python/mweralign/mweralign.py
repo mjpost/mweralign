@@ -199,6 +199,19 @@ class MwerAlign:
         """
         self._segmenter.set_legacy_penalty(enable)
 
+    def set_forbid_midword_boundary(self, enable: bool):
+        """
+        Forbid mid-word segmentation boundaries.
+
+        When enabled, the segmentation DP may not end a non-final segment at a
+        position that would start the following segment on a word-internal,
+        non-punctuation piece. Off by default.
+
+        Args:
+            enable: True to forbid mid-word segmentation boundaries
+        """
+        self._segmenter.set_forbid_midword_boundary(enable)
+
     def align(self, reference: str, hypothesis: str) -> str:
         """
         Align reference and hypothesis strings.
@@ -251,7 +264,8 @@ class MwerAlign:
 
 
 def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False,
-                legacy_penalty: bool = False) -> str:
+                legacy_penalty: bool = False,
+                forbid_midword_boundary: bool = False) -> str:
     """
     Convenience function to align two texts.
     
@@ -260,6 +274,8 @@ def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False,
         hypothesis: Hypothesis text
         is_tokenized: Whether the texts are tokenized (default: False)
         legacy_penalty: Restore the pre-fix penalty behavior (default: False)
+        forbid_midword_boundary: Forbid mid-word segmentation boundaries
+            (default: False)
         
     Returns:
         Alignment result
@@ -268,11 +284,14 @@ def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False,
     aligner.set_tokenized(is_tokenized)
     if legacy_penalty:
         aligner.set_legacy_penalty(True)
+    if forbid_midword_boundary:
+        aligner.set_forbid_midword_boundary(True)
     return aligner.align(reference, hypothesis)
 
 
 def align_texts_traced(reference: str, hypothesis: str, is_tokenized: bool = False,
                        legacy_penalty: bool = False,
+                       forbid_midword_boundary: bool = False,
                        cells: bool = False) -> Tuple[str, AlignmentTrace]:
     """
     Align two texts and also return the segmentation DP trace.
@@ -286,6 +305,8 @@ def align_texts_traced(reference: str, hypothesis: str, is_tokenized: bool = Fal
         hypothesis: Hypothesis text
         is_tokenized: Whether the texts are tokenized (default: False)
         legacy_penalty: Restore the pre-fix penalty behavior (default: False)
+        forbid_midword_boundary: Forbid mid-word segmentation boundaries
+            (default: False)
         cells: Also record per-cell costs (O(J*I*R); small inputs only)
 
     Returns:
@@ -295,6 +316,8 @@ def align_texts_traced(reference: str, hypothesis: str, is_tokenized: bool = Fal
     aligner.set_tokenized(is_tokenized)
     if legacy_penalty:
         aligner.set_legacy_penalty(True)
+    if forbid_midword_boundary:
+        aligner.set_forbid_midword_boundary(True)
     aligner.set_collect_trace(True, cells=cells)
     result = aligner.align(reference, hypothesis)
     return result, aligner.get_trace()
@@ -503,13 +526,15 @@ def main():
             if collect_trace:
                 result, trace = align_texts_traced(
                     ref_str, hyp_str, is_tokenized=is_tokenized,
-                    legacy_penalty=args.legacy_penalty)
+                    legacy_penalty=args.legacy_penalty,
+                    forbid_midword_boundary=is_tokenized)
                 print(f"# docid range {i} (segments {docid_start}-{docid_end})",
                       file=trace_out)
                 print(trace.format_costs(), file=trace_out)
             else:
                 result = align_texts(ref_str, hyp_str, is_tokenized=is_tokenized,
-                                     legacy_penalty=args.legacy_penalty)
+                                     legacy_penalty=args.legacy_penalty,
+                                     forbid_midword_boundary=is_tokenized)
 
             # Output result
             for line in result.split("\n"):

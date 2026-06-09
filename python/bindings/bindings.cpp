@@ -38,6 +38,11 @@ PYBIND11_MODULE(_mweralign, m) {
              "TEMPORARY: restore the pre-fix penalty behavior (apply the "
              "segment-initial internal-word penalty even for untokenized input)",
              py::arg("enable"))
+        .def("set_forbid_midword_boundary", &MwerSegmenter::setForbidMidwordBoundary,
+             "Forbid segmentation boundaries that would start a non-final "
+             "segment on a word-internal, non-punctuation piece (no mid-word "
+             "cuts). Off by default.",
+             py::arg("enable"))
         .def("loadrefs", &MwerSegmenter::loadrefs,
              "Load references from file",
              py::arg("filename"))

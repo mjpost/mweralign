@@ -3,6 +3,7 @@
 /* Richard Zens                                                     */
 /* ---------------------------------------------------------------- */
 #include "mwerAlign.hh"
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -14,6 +15,13 @@
 #else
 #define MWER_UNLIKELY(x) (x)
 #endif
+
+// Penalty added to a segmentation boundary that would start the next segment on
+// a word-internal piece, when the hard boundary constraint is enabled. Chosen
+// far above any real word-error gain (segment costs are O(tens)) yet small
+// enough that accumulation across a document's segments stays well below the
+// merge sentinel (1e8), avoiding overflow of the unsigned cost.
+static const unsigned int MIDWORD_FORBID = 100000u;
 
 using namespace std;
 
@@ -428,12 +436,29 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
             if (merge) {
                 // segment end, merge
                 ++s;
-                BC[j][s] = min;
+                // Hard boundary constraint (opt-in): a non-final segment may not
+                // end here if doing so would start the *next* segment on a
+                // word-internal, non-punctuation piece (a mid-word cut). The
+                // boundary is at hyp position j, so the next segment begins at
+                // piece hyp_ids[j]. We make such boundaries prohibitively
+                // expensive; the penalty is carried forward (mnew) so any path
+                // through a mid-word boundary loses the global minimization. The
+                // constant is far above any achievable word-error gain yet small
+                // enough that accumulation stays well under the merge sentinel.
+                //
+                // Only meaningful for tokenized (SentencePiece) input: with
+                // plain whitespace input every word lacks the leading marker and
+                // so looks "internal", which would forbid every boundary. The
+                // `segmenting` guard mirrors the per-cell internal-word penalty.
+                unsigned int boundaryPenalty = 0;
+                if (forbidMidwordBoundary_ && segmenting && s < S && j < J && isInternalWord(hyp_ids[j]))
+                    boundaryPenalty = MIDWORD_FORBID;
+                BC[j][s] = min + boundaryPenalty;
                 BP[j][s] = argmin;
                 BR[j][s] = bestRef;
                 //     std::cerr << "MERGE: " << min << " " << argmin << "\n";
                 for (size_t r = 0; r < R; ++r) {
-                    mnew[r][0].cost = min;
+                    mnew[r][0].cost = min + boundaryPenalty;
                     mnew[r][0].bp = j;
                 }
             }
