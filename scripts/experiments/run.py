@@ -94,7 +94,7 @@ def main(argv=None) -> int:
                 continue
 
             manual_scores = {m: score.score(m, lp, manual, refs, srcs)
-                             for m in args.metrics if m in ("bleu", "chrf")}
+                             for m in args.metrics if m in ("bleu", "chrf", "chrfpp")}
             # Optional metrics may be unavailable; record None on failure.
             for m in args.metrics:
                 if m in manual_scores:

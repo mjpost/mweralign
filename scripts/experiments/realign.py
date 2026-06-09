@@ -34,8 +34,13 @@ SEGMENTERS = {
     "none": lambda tgt: [],
     "cj": lambda tgt: ["-m", "cj", "-l", tgt],
     "flores200": lambda tgt: ["-m", str(data.flores_model())],
-    # Custom identity-normalization SPM (paper model); character-preserving.
-    "spm": lambda tgt: ["-m", str(data.spm_model())],
+    # Custom identity-normalization SPM (paper models); character-preserving.
+    # "spm" is an alias for the 256k model; size-specific names are also exposed.
+    "spm": lambda tgt: ["-m", str(data.spm_model(256000))],
+    "spm32k": lambda tgt: ["-m", str(data.spm_model(32000))],
+    "spm64k": lambda tgt: ["-m", str(data.spm_model(64000))],
+    "spm128k": lambda tgt: ["-m", str(data.spm_model(128000))],
+    "spm256k": lambda tgt: ["-m", str(data.spm_model(256000))],
 }
 
 

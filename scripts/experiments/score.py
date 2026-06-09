@@ -47,6 +47,11 @@ def chrf(langpair: str, hyps: List[str], refs: List[List[str]], srcs: List[str])
     return sacrebleu.corpus_chrf(hyps, refs).score
 
 
+def chrfpp(langpair: str, hyps: List[str], refs: List[List[str]], srcs: List[str]) -> float:
+    # chrF++ adds word n-grams (word_order=2) on top of character n-grams.
+    return sacrebleu.corpus_chrf(hyps, refs, word_order=2).score
+
+
 def _write_lines(path: Path, lines: List[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -131,6 +136,7 @@ Metric = Callable[[str, List[str], List[List[str]], List[str]], float]
 METRICS: Dict[str, Metric] = {
     "bleu": bleu,
     "chrf": chrf,
+    "chrfpp": chrfpp,
     "comet22": comet22,
     "gemboid": gemboid,
 }
