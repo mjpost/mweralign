@@ -288,14 +288,15 @@ bool MwerSegmenter::isInternalWord(const unsigned int w) const
 unsigned int MwerSegmenter::additionalInsertionCosts(const unsigned int ref_next, const unsigned int ref_prev, bool is_new_sent,
                                                      const unsigned int w) const
 {
-    // large cost if we're putting an internal word at the start of a sentence.
-    // This only makes sense when the input is tokenized (e.g. with SentencePiece),
-    // where word-internal pieces lack the leading marker. With plain whitespace
-    // input every word looks "internal" (isInternal() == true), so without the
-    // segmenting guard this penalty would fire on every segment-initial insertion
-    // and corrupt the alignment. The legacyPenalty_ flag intentionally drops the
-    // guard to reproduce the pre-fix (paper) behavior.
-    if ((segmenting || legacyPenalty_) && is_new_sent && isInternal(w)) {
+    // Legacy-only penalty for putting a word-internal piece at a segment start.
+    // This was the original (paper) mechanism for discouraging mid-word segment
+    // breaks, but it acts on the *alignment* cell (the segment-initial reference
+    // row) rather than on the segmentation *boundary*, so the DP can route
+    // around it and start an output segment mid-word anyway. The hard mid-word
+    // boundary constraint (forbidMidwordBoundary_) supersedes it for the normal
+    // and SentencePiece paths; this penalty is retained only to reproduce the
+    // pre-fix (paper) numbers under legacyPenalty_.
+    if (legacyPenalty_ && is_new_sent && isInternal(w)) {
         return 1000;
     }
 
@@ -379,8 +380,11 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
                     m[r][i - 1] = mnew[r][0];
                 } else {
                     // do compute next step in the LEVENSHTEIN distance
-                    // add a large cost if this is the start of sentence and the word is internal
-                    float extra_cost = ((segmenting || legacyPenalty_) && is_new_sent && isInternal(hyp_ids[j - 1]) ? 1000 : 0);
+                    // Legacy-only: large cost for a word-internal piece at a
+                    // segment-initial reference row (paper reproduction). The
+                    // hard mid-word boundary constraint now owns mid-word-cut
+                    // prevention for the normal/SentencePiece paths.
+                    float extra_cost = (legacyPenalty_ && is_new_sent && isInternal(hyp_ids[j - 1]) ? 1000 : 0);
 
                     del = mnew[r][0].cost + getDeletionCosts(ref_ids[r][i - 1]) + extra_cost;
                     ins = m[r][i].cost + getInsertionCosts(hyp_ids[j - 1]) +

@@ -182,18 +182,30 @@ def test_cells_recorded_and_chosen_is_minimal():
         assert c.op in ("S", "I", "D")
 
 
-def test_internal_word_penalty_only_fires_when_tokenized():
-    """The +1000 penalty is recorded only when alignment is tokenized."""
+def test_internal_word_penalty_only_fires_under_legacy():
+    """The +1000 internal-word penalty fires only in legacy mode.
+
+    The penalty acts on the segment-initial alignment cell, not the output
+    boundary, so it no longer governs the normal/SentencePiece paths (the hard
+    mid-word boundary constraint does). It is retained solely to reproduce the
+    pre-fix (paper) numbers, i.e. it fires only when ``legacy_penalty=True``.
+    """
     # A '▁'-marked stream with an internal (markerless) piece 'w'.
     ref = "\u2581x \u2581y\n\u2581z \u2581w"
     hyp = "\u2581x \u2581y \u2581z w"
 
-    _, traced_on = align_texts_traced(ref, hyp, is_tokenized=True, cells=True)
-    assert any(c.extra == 1000 for c in traced_on.cells), \
-        "tokenized alignment should consider an internal-start penalty"
+    _, legacy = align_texts_traced(
+        ref, hyp, is_tokenized=True, legacy_penalty=True, cells=True)
+    assert any(c.extra == 1000 for c in legacy.cells), \
+        "legacy mode should consider the segment-initial internal-word penalty"
 
-    _, traced_off = align_texts_traced(ref, hyp, is_tokenized=False, cells=True)
-    assert all(c.extra == 0 for c in traced_off.cells), \
+    # Tokenized but non-legacy: the penalty must NOT fire (constraint owns this).
+    _, tokenized = align_texts_traced(ref, hyp, is_tokenized=True, cells=True)
+    assert all(c.extra == 0 for c in tokenized.cells), \
+        "non-legacy tokenized alignment must not apply the per-cell penalty"
+
+    _, plain = align_texts_traced(ref, hyp, is_tokenized=False, cells=True)
+    assert all(c.extra == 0 for c in plain.cells), \
         "untokenized alignment must not apply the penalty"
 
 
