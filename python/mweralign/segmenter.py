@@ -54,6 +54,12 @@ def is_latin1(c):
     return ord(c) <= 0x00FF
 
 
+# SentencePiece meta-symbol used to represent a space (U+2581, "LOWER ONE EIGHTH
+# BLOCK"). It does not occur in normal text, so it can stand in for spaces
+# without colliding with any literal input character (e.g. an actual '_').
+SPM_SPACE = "\u2581"
+
+
 class CJSegmenter(Segmenter):
     """
     A segmenter that tokenizes text based on Latin-1 characters and Han characters.
@@ -69,17 +75,19 @@ class CJSegmenter(Segmenter):
         treat each Latin1 word as a token, and insert whitespace in between.
         """
 
-        # preserve existing whitespaces
-        text = text.replace(" ", "_")
+        # Preserve existing whitespace by mapping spaces to the SentencePiece
+        # meta-symbol '▁', which never occurs in normal text and so cannot be
+        # confused with a literal input character (e.g. an actual '_').
+        text = text.replace(" ", SPM_SPACE)
 
         tokens = []
         i = 0
         while i < len(text):
             c = text[i]
-            if is_latin1(c):
-                # Move forward over a Latin1 word
+            if is_latin1(c) or c == SPM_SPACE:
+                # Move forward over a Latin1 word, keeping attached spaces ('▁')
                 start = i
-                while i < len(text) and is_latin1(text[i]):
+                while i < len(text) and (is_latin1(text[i]) or text[i] == SPM_SPACE):
                     i += 1
                 tokens.append(text[start:i])
             else:
@@ -100,7 +108,8 @@ class CJSegmenter(Segmenter):
             Decoded string
         """
 
-        text = text.replace(" ", "").replace("_", " ").strip()  # restore spaces
+        # Drop the inter-token separator spaces, then restore the encoded spaces.
+        text = text.replace(" ", "").replace(SPM_SPACE, " ").strip()
         return text
     
 

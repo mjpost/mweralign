@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SentencePiece paths; the penalty is retained only to reproduce the pre-fix
   (paper) numbers.
 
+### Fixed
+- `cj` segmenter dropped literal underscores: it previously mapped spaces to `_`
+  to preserve whitespace, so any literal `_` in the input (e.g. inside URLs or
+  identifiers like `WxsYTK8l_Gk` or `user_name_123`) was turned into a space on
+  detokenization. Spaces are now represented with the SentencePiece meta-symbol
+  `▁` (U+2581), which never occurs in normal text, so the segmenter round-trips
+  any input faithfully without escaping.
+
 ## [1.2.0] - 2026-06-05
 
 ### Added
