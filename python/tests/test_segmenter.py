@@ -1,5 +1,5 @@
 import pytest
-from mweralign.segmenter import CJSegmenter, SPSegmenter, is_latin1
+from mweralign.segmenter import CJSegmenter, SPSegmenter, is_latin1, is_cjk, cjk_fraction
 
 
 class TestIsLatin1:
@@ -22,6 +22,41 @@ class TestIsLatin1:
         assert not is_latin1('日')  # Japanese character
         assert not is_latin1('한')  # Korean character
         assert not is_latin1('€')  # Euro symbol (U+20AC)
+
+
+class TestCJKDetection:
+    """Test the is_cjk / cjk_fraction helpers used to suggest the language flag."""
+
+    def test_is_cjk_true(self):
+        assert is_cjk('中')   # Han
+        assert is_cjk('日')   # Han (also Japanese)
+        assert is_cjk('あ')   # Hiragana
+        assert is_cjk('カ')   # Katakana
+        assert is_cjk('한')   # Hangul
+
+    def test_is_cjk_false(self):
+        assert not is_cjk('a')
+        assert not is_cjk('é')
+        assert not is_cjk('!')
+        assert not is_cjk('€')
+
+    def test_cjk_fraction_all_cjk(self):
+        assert cjk_fraction('这是测试') == 1.0
+
+    def test_cjk_fraction_none(self):
+        assert cjk_fraction('hello world') == 0.0
+
+    def test_cjk_fraction_ignores_whitespace(self):
+        # Spaces are excluded from the denominator.
+        assert cjk_fraction('中 文') == 1.0
+
+    def test_cjk_fraction_mixed(self):
+        # 2 of 4 non-space characters are CJK.
+        assert cjk_fraction('ab中文') == pytest.approx(0.5)
+
+    def test_cjk_fraction_empty(self):
+        assert cjk_fraction('') == 0.0
+        assert cjk_fraction('   ') == 0.0
 
 
 class TestCJSegmenter:

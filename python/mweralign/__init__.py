@@ -26,7 +26,7 @@ from .mweralign import (
     wer,
 )
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 __all__ = [
     "MwerAlign",
     "align_texts",

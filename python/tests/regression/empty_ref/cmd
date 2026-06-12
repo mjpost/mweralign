@@ -1,1 +1,1 @@
--r ref.txt -t hyp.txt
+-r ref.txt -t hyp.txt -m none

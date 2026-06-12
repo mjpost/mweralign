@@ -54,6 +54,30 @@ def is_latin1(c):
     return ord(c) <= 0x00FF
 
 
+def is_cjk(c: str) -> bool:
+    """True if ``c`` is a Han ideograph, Japanese kana, or Korean Hangul.
+
+    Used to detect non-whitespace scripts so the CLI can suggest the language
+    flag that allows sentence-initial word boundaries.
+    """
+    o = ord(c)
+    return (
+        0x3040 <= o <= 0x30FF      # Hiragana + Katakana
+        or 0x3400 <= o <= 0x4DBF   # CJK Unified Ideographs Extension A
+        or 0x4E00 <= o <= 0x9FFF   # CJK Unified Ideographs
+        or 0xAC00 <= o <= 0xD7AF   # Hangul syllables
+        or 0xF900 <= o <= 0xFAFF   # CJK Compatibility Ideographs
+    )
+
+
+def cjk_fraction(text: str) -> float:
+    """Fraction of the non-space characters in ``text`` that are CJK."""
+    chars = [c for c in text if not c.isspace()]
+    if not chars:
+        return 0.0
+    return sum(1 for c in chars if is_cjk(c)) / len(chars)
+
+
 # SentencePiece meta-symbol used to represent a space (U+2581, "LOWER ONE EIGHTH
 # BLOCK"). It does not occur in normal text, so it can stand in for spaces
 # without colliding with any literal input character (e.g. an actual '_').

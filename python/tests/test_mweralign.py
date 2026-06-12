@@ -162,13 +162,13 @@ def test_score_matches_alignment_aswer(tmp_path):
     sys_in.write_text("hello this is a\nmeeting welcome here everybody\ngood-bye see you\n")
 
     # Align and capture both the AS-WER (stderr) and the segmented output.
-    _, stderr = _run_cli(["-r", str(ref), "-t", str(sys_in), "-o", str(aligned)])
+    _, stderr = _run_cli(["-r", str(ref), "-t", str(sys_in), "-o", str(aligned), "-m", "none"])
     m = re.search(r"AS-WER.*?:\s*([0-9.]+)", stderr)
     assert m, f"could not find AS-WER in stderr:\n{stderr}"
     aswer = float(m.group(1))
 
     # Score the aligner's own output back against the references.
-    stdout, _ = _run_cli(["--score", "-r", str(ref), "-t", str(aligned)])
+    stdout, _ = _run_cli(["--score", "-r", str(ref), "-t", str(aligned), "-m", "none"])
     m = re.search(r"TOTAL: WER=([0-9.]+)", stdout)
     assert m, f"could not find TOTAL WER in scoring output:\n{stdout}"
     score_wer = float(m.group(1))
@@ -211,6 +211,39 @@ def test_score_with_spm_tokenizer(tmp_path):
     # First segment differs (a -> the), second is identical -> total WER > 0.
     assert float(total.group(1)) > 0.0
     assert "segment 2: WER=0.00" in stdout
+
+
+def test_no_whitespace_flag_matches_chinese_language(tmp_path):
+    """``-w`` must be equivalent to ``-l zh`` and differ from the default.
+
+    For a non-whitespace language, SPM pieces should not be treated as
+    word-internal, so segment boundaries may start mid-"word". The ``-w``
+    flag captures this generically; passing ``-l zh`` is the language-specific
+    way to request the same behavior. Both must agree, and both must differ
+    from the default (whitespace-language) handling on Chinese input.
+    """
+    from pathlib import Path
+
+    model = Path(__file__).parent / "regression" / "spm32k.model"
+    if not model.exists():
+        pytest.skip("zh_spm model fixture not available")
+
+    ref = tmp_path / "ref.txt"
+    hyp = tmp_path / "hyp.txt"
+    ref.write_text("新旧兼顾解决问题\n我们的规划体系也需要进行调整\n")
+    hyp.write_text("新旧兼顾解决问题我们的规划体系也需要进行调整\n")
+
+    out_lang = tmp_path / "lang.txt"
+    out_w = tmp_path / "w.txt"
+    out_default = tmp_path / "default.txt"
+    _run_cli(["-r", str(ref), "-t", str(hyp), "-m", str(model), "-l", "zh", "-o", str(out_lang)])
+    _run_cli(["-r", str(ref), "-t", str(hyp), "-m", str(model), "-w", "-o", str(out_w)])
+    _run_cli(["-r", str(ref), "-t", str(hyp), "-m", str(model), "-o", str(out_default)])
+
+    # -w and -l zh request the same non-whitespace handling.
+    assert out_w.read_text() == out_lang.read_text()
+    # ...and that handling differs from the default whitespace-language path.
+    assert out_w.read_text() != out_default.read_text()
 
 
 if __name__ == "__main__":

@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-06-12
+
+### Changed
+- **`spm32k` is now the default tokenizer.** Running without `-m`/`--tokenizer`
+  previously split on whitespace; it now uses the on-demand `spm32k`
+  SentencePiece model (downloaded and cached on first use). Pass `-m none` (or
+  `-m whitespace`) to restore the plain-whitespace behavior.
+
+### Added
+- `--no-whitespace` / `-w`: a language-agnostic flag for scripts that do not
+  delimit words with whitespace (e.g. Chinese, Japanese). It lets output
+  segments begin at word-internal boundaries, equivalent to `-l zh` / `-l ja`.
+- CJK detection hint: when the reference looks like a non-whitespace script but
+  neither `-l zh`/`-l ja` nor `-w` was given, the CLI prints a one-line
+  suggestion to add the flag. New `is_cjk()` and `cjk_fraction()` helpers in
+  `mweralign.segmenter` back this check.
+
 ## [1.3.0] - 2026-06-11
 
 ### Added
@@ -33,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edit costs are exposed through the Python API via
   `align_texts_traced(..., cells=True)`.
 - WMT24 regression suite: golden-file test cases built from real WMT24 data
-  exercising whitespace, `cj`, and flores200 segmenters, document-merged
+  exercising whitespace, `cj`, and SentencePiece segmenters, document-merged
   realignment (`-d`), and `--score`.
 
 ### Changed

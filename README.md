@@ -25,30 +25,54 @@ You can see usage information by running mweralign with the `--help` flag:
 
     mweralign --help
 
-The standard use case is to provide a reference file, in which segments (sentences) are
-listed one per line, and a hypothesis file, which contains the output of a speech translation system,
-and has no line requirements. The output will be a file with the same number of lines as the hypothesis,
-where each line contains the index of the segment in the reference that corresponds to that hypothesis
-line.
+The core flags are:
 
-    mweralign -r ref.txt -h hyp.txt -o aligned.txt
+| Flag | Long form | Meaning |
+|------|-----------|---------|
+| `-r` | `--ref-file`   | Reference file: the target segmentation, one segment per line. **Required.** |
+| `-t` | `--hyp-file`   | Hypothesis file: the system output to re-segment. **Required.** |
+| `-o` | `--output`     | Output file (default: stdout). |
+| `-m` | `--tokenizer`  | Tokenizer/segmenter to use (default: `spm32k`; see below). |
+| `-l` | `--language`   | ISO 639-1 language code (e.g. `de`, `zh`). |
+| `-w` | `--no-whitespace` | The language does not delimit words with whitespace (CJK); see *Language code*. |
+| `-d` | `--docid-file` | Document ids, one per reference line (see *Document-aware alignment*). |
+|      | `--score`      | Scoring mode: report WER instead of re-segmenting (see *Scoring mode*). |
 
-You will want to use a tokenizer. Currently supported is "cj", which segments Han characters with whitespace,
-or any SentencePiece model, which are provided in the form of a filesystem path:
+### Aligning a hypothesis to a reference segmentation
 
-    mweralign -r ref.zh.txt -h hyp.txt -o aligned.txt -t cj
+The standard use case provides a reference file (segments listed one per line) and a
+hypothesis file (the output of a speech-translation system, with no line requirements).
+mweralign concatenates the hypothesis into a single word stream and re-splits it to match
+the reference segmentation. The output has the **same number of lines as the reference**,
+where each line is the slice of the hypothesis aligned to the corresponding reference
+segment:
 
-The package ships with pre-trained, character-preserving (identity-normalization)
-SentencePiece models that are downloaded on demand the first time you request them by
-name. Pass `spm32k`, `spm64k`, `spm128k`, or `spm256k` (`spm` is an alias for 256k):
+    mweralign -r ref.txt -t hyp.txt -o aligned.txt
 
-    mweralign -r ref.txt -h hyp.txt -o aligned.txt -t spm32k
+### Tokenization
 
-The model is fetched from the project's GitHub Release, verified against a checksum, and
-cached under `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`). To pre-fetch
-all sizes (e.g. for offline use):
+For good alignment you should use a tokenizer, selected with `-m`. The default is
+`spm32k` (see the recommendation below). Supported values are:
 
-    python -m mweralign.models --all
+* `none` (or `whitespace`) — no tokenizer; split on whitespace only;
+* `cj` — segments Han characters with whitespace (dependency-free, no model needed);
+* a named, on-demand SentencePiece model: `spm32k`, `spm64k`, `spm128k`, or `spm256k`
+  (`spm` is an alias for `spm256k`);
+* a filesystem path to any SentencePiece `.model` file.
+
+The named models are character-preserving (identity-normalization) models that ship with
+the project. They are downloaded on demand the first time you request them, fetched from
+the project's GitHub Release, verified against a checksum, and cached under
+`~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`):
+
+    mweralign -r ref.txt -t hyp.txt -o aligned.txt -m spm32k   # the default
+
+    mweralign -r ref.txt -t hyp.txt -o aligned.txt -m none     # plain whitespace
+
+To pre-fetch the models (e.g. for offline use):
+
+    python -m mweralign.models --all          # all sizes
+    python -m mweralign.models spm32k spm256k # specific ones
 
 **Recommendation:** for the best segmentation quality, use a character-preserving
 (identity-normalization) SentencePiece model for *all* languages, including CJK. In our
@@ -58,27 +82,61 @@ accurately than whitespace tokenization on every language pair, and on the CJK p
 boundary accuracy): per-character tokenization gives the aligner too much freedom, whereas
 subword pieces constrain boundaries to sensible word edges. Vocabulary size has little
 effect (32k is sufficient; 128k is marginally best), so a small model is a fine default.
-Note that the flores200 SPM model applies NMT-style normalization that *rewrites*
-characters, so it is unsuitable when you need the original text restored verbatim; use an
-identity-normalization model for that. The `cj` segmenter remains available as a
-dependency-free fallback.
+The `cj` segmenter remains available as a dependency-free fallback.
 
-    # download the flores200 SPM model (one time)
-    sacrebleu -t wmt24 -l en-zh --echo src | sacrebleu -t wmt24 -l en-zh --tok flores200 > /dev/null
-    # align
-    mweralign -r ref.txt -h hyp.txt -o aligned.txt -t ~/.sacrebleu/models/flores200sacrebleuspm
+Note that the flores200 SPM model (e.g. from sacrebleu) applies NMT-style normalization
+that *rewrites* characters, so it is unsuitable when you need the original text restored
+verbatim; use an identity-normalization model such as `spm32k` for that.
 
-You may also wish to supply the ISO 639-1 language code (-l zh). For zh and ja, this tells the underlying
-AS-WER algorithm not to prevent sentences from starting with the SentencePiece space character. For other
-languages, it has no effect.
+### Language code
 
-    mweralign -r ref.txt -h hyp.txt -o aligned.txt -t cj -l zh
+You may also supply the ISO 639-1 language code with `-l`. For `zh` and `ja`, this tells
+the underlying AS-WER algorithm not to prevent sentences from starting with the
+SentencePiece space character. For other languages it has no effect.
+
+    mweralign -r ref.zh.txt -t hyp.txt -o aligned.txt -m spm256k -l zh
+
+Equivalently, you can pass `--no-whitespace` (`-w`) for any language whose script does not
+delimit words with whitespace (e.g. Chinese, Japanese), without naming a specific language:
+
+    mweralign -r ref.zh.txt -t hyp.txt -o aligned.txt -m spm256k -w
+
+If the reference looks like a CJK script but neither `-l zh`/`-l ja` nor `-w` was given,
+mweralign prints a one-line suggestion to add the flag.
 
 When a SentencePiece model is used to tokenize a non-CJK language, the aligner also forbids
 *mid-word* segment boundaries: no output segment may begin on a word-internal sub-word piece
 (one lacking the leading `▁` marker), so re-segmenting never splits a word across two segments.
 This is automatic and requires no flag. Pure-punctuation pieces are exempt, since they
 legitimately attach to the preceding token.
+
+By default the re-segmented output is detokenized back to plain text. Pass `--no-detok` to
+emit the tokenized pieces instead.
+
+### Document-aware alignment
+
+If your hypothesis is split per document (rather than one big stream), pass a docid file
+with `-d`. It lists one document id per *reference* line; reference lines sharing a docid
+form a document, and the hypothesis file must contain one line per distinct document (in
+order). Each document's hypothesis is then aligned independently to its own reference
+segments:
+
+    mweralign -r ref.txt -t hyp.txt -d docids.txt -o aligned.txt
+
+### Scoring mode
+
+With `--score`, mweralign skips alignment and instead computes word error rate on already
+parallel input: `ref.txt` and `hyp.txt` must have the same number of lines, compared
+line-by-line. It prints a per-segment breakdown and a corpus total:
+
+    mweralign --score -r ref.txt -t hyp.txt
+
+    segment 1: WER=150.00 (S=12 I=6 D=0 N=12)
+    segment 2: WER=100.00 (S=11 I=0 D=7 N=18)
+    ...
+    TOTAL: WER=42.50 (errors=85 ref_words=200)
+
+A tokenizer (`-m`) may be combined with `--score` to score on tokenized text.
 
 ### Inspecting the segmentation scores
 
@@ -93,7 +151,7 @@ unused.
 
 Or for a longer example:
 
-    mweralign % mweralign \
+    mweralign \
       -r test/data/wmt22.en-de.en \
       -t test/data/wmt22.en-de.sys \
       -m spm256k \
