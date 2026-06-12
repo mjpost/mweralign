@@ -9,7 +9,9 @@ case exercises a different mweralign feature on real data:
 
 * ``wmt24_ende_merge_none``    - whitespace (no segmenter), document-merged
                                   hypotheses realigned via ``-d`` docids.
-* ``wmt24_ende_merge_flores``  - same, but with the flores200 SPM segmenter.
+* ``wmt24_ende_merge_spm``     - same, but with a SentencePiece segmenter
+                                  (a small identity model committed alongside
+                                  the case so the test is self-contained).
 * ``wmt24_jazh_merge_cj``      - Han-character (``cj``) segmenter on ja-zh.
 * ``wmt24_ende_score``         - ``--score`` mode on a parallel slice.
 
@@ -38,10 +40,14 @@ from typing import List, Tuple
 
 import sacrebleu
 
-# flores200 SPM model shipped/downloaded by sacrebleu; reused for the `-m` flag.
-FLORES_MODEL = Path.home() / ".sacrebleu" / "models" / "flores200sacrebleuspm"
-
 REGRESSION_DIR = Path(__file__).resolve().parent.parent / "python" / "tests" / "regression"
+
+# Identity (character-preserving) SPM model copied into the SPM merge case so
+# the regression suite stays self-contained and network-free. Sourced from the
+# project's own pre-trained models under ``expt/data`` and named after the
+# matching ``-m`` alias (``spm32k``) so the case is self-documenting.
+SPM_MODEL_NAME = "spm32k.model"
+SPM_MODEL_SRC = Path(__file__).resolve().parent.parent / "expt" / "data" / "32000.model"
 
 
 def fetch(langpair: str) -> Tuple[List[str], List[str]]:
@@ -108,7 +114,10 @@ def write_case(name: str, cmd: str, files: dict[str, str]) -> None:
     case_dir.mkdir(parents=True, exist_ok=True)
     (case_dir / "cmd").write_text(cmd.strip() + "\n", encoding="utf-8")
     for fname, content in files.items():
-        (case_dir / fname).write_text(content, encoding="utf-8")
+        if isinstance(content, bytes):
+            (case_dir / fname).write_bytes(content)
+        else:
+            (case_dir / fname).write_text(content, encoding="utf-8")
     # Remove any stale golden so it is regenerated against the new fixture.
     (case_dir / "expected.txt").unlink(missing_ok=True)
     print(f"wrote {name}: {len(files)} fixture file(s)")
@@ -118,18 +127,28 @@ def lines(seq: List[str]) -> str:
     return "\n".join(seq) + "\n"
 
 
-def build_merge_case(name: str, langpair: str, cmd_extra: str, **slice_kw) -> None:
+def build_merge_case(
+    name: str,
+    langpair: str,
+    cmd_extra: str,
+    *,
+    extra_files: dict[str, str] | None = None,
+    **slice_kw,
+) -> None:
     refs, docids = fetch(langpair)
     sel_refs, sel_docids = select_slice(refs, docids, **slice_kw)
     hyps = merged_hyps(sel_refs, sel_docids)
+    files = {
+        "ref.txt": lines(sel_refs),
+        "docids.txt": lines(sel_docids),
+        "hyp.txt": lines(hyps),
+    }
+    if extra_files:
+        files.update(extra_files)
     write_case(
         name,
         f"-r ref.txt -t hyp.txt -d docids.txt {cmd_extra}".strip(),
-        {
-            "ref.txt": lines(sel_refs),
-            "docids.txt": lines(sel_docids),
-            "hyp.txt": lines(hyps),
-        },
+        files,
     )
 
 
@@ -150,17 +169,19 @@ def build_score_case(name: str, langpair: str, **slice_kw) -> None:
 
 
 def main() -> None:
-    if not FLORES_MODEL.exists():
+    if not SPM_MODEL_SRC.exists():
         raise SystemExit(
-            f"flores200 SPM model not found at {FLORES_MODEL}.\n"
-            "Trigger a download first, e.g.:\n"
-            "  python -c \"from sacrebleu.tokenizers.tokenizer_spm import "
-            "Flores200Tokenizer; Flores200Tokenizer()('x')\""
+            f"SPM model not found at {SPM_MODEL_SRC}.\n"
+            "Train or place an identity SentencePiece model there first "
+            "(see scripts/spm-train.sh)."
         )
 
     build_merge_case("wmt24_ende_merge_none", "en-de", "")
     build_merge_case(
-        "wmt24_ende_merge_flores", "en-de", f"-m {FLORES_MODEL}",
+        "wmt24_ende_merge_spm",
+        "en-de",
+        f"-m {SPM_MODEL_NAME}",
+        extra_files={SPM_MODEL_NAME: SPM_MODEL_SRC.read_bytes()},
     )
     build_merge_case("wmt24_jazh_merge_cj", "ja-zh", "-m cj -l zh", max_chars=120)
     build_score_case("wmt24_ende_score", "en-de")

@@ -1,0 +1,1 @@
+-r ref.txt -t hyp.txt -d docids.txt -m spm32k.model
