@@ -47,7 +47,7 @@ REGRESSION_DIR = Path(__file__).resolve().parent.parent / "python" / "tests" / "
 # project's own pre-trained models under ``expt/data`` and named after the
 # matching ``-m`` alias (``spm32k``) so the case is self-documenting.
 SPM_MODEL_NAME = "spm32k.model"
-SPM_MODEL_SRC = Path(__file__).resolve().parent.parent / "expt" / "data" / "32000.model"
+SPM_MODEL_SRC = Path(__file__).resolve().parent.parent / "expt" / "data" / SPM_MODEL_NAME
 
 
 def fetch(langpair: str) -> Tuple[List[str], List[str]]:

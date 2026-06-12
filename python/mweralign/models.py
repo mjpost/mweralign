@@ -43,28 +43,24 @@ _REPO = "mjpost/mweralign"
 RELEASE_TAG = "spm-models-v1"
 _BASE_URL = f"https://github.com/{_REPO}/releases/download/{RELEASE_TAG}"
 
-# vocab size -> SHA-256 of the corresponding ``<vocab>.model`` asset.
-MODELS: Dict[int, str] = {
-    32000: "bdf64c0ad08e9514f8aa174294756c3230c950315d8b4369a79ec1176aa2dad8",
-    64000: "2ccc4fd82d0ee0ff0956745911e26c7703ef7474b1196a5d000affebe42b48c2",
-    128000: "9abd430f20af65b9bacd9905c4651f1c48ecbdf2d3e73c8f7c9a7a191d02273e",
-    256000: "7d8fd4d5ea33e63f8b7407ddbf6088ef5a52e6b059e578d023fc5a093d56914e",
+# Canonical model name -> SHA-256 of the corresponding ``<name>.model`` asset.
+# The name is also the ``-m``/``--tokenizer`` value and the cached filename.
+MODELS: Dict[str, str] = {
+    "spm32k": "bdf64c0ad08e9514f8aa174294756c3230c950315d8b4369a79ec1176aa2dad8",
+    "spm64k": "2ccc4fd82d0ee0ff0956745911e26c7703ef7474b1196a5d000affebe42b48c2",
+    "spm128k": "9abd430f20af65b9bacd9905c4651f1c48ecbdf2d3e73c8f7c9a7a191d02273e",
+    "spm256k": "7d8fd4d5ea33e63f8b7407ddbf6088ef5a52e6b059e578d023fc5a093d56914e",
 }
 
-# Friendly aliases accepted by ``-m``/``--tokenizer``. ``spm`` defaults to 256k,
-# matching the experiment harness.
-ALIASES: Dict[str, int] = {
-    "spm": 256000,
-    "spm32k": 32000,
-    "spm64k": 64000,
-    "spm128k": 128000,
-    "spm256k": 256000,
+# Friendly shorthand: ``spm`` defaults to 256k, matching the experiment harness.
+ALIASES: Dict[str, str] = {
+    "spm": "spm256k",
 }
 
 
 def is_model_name(name: str) -> bool:
-    """True if ``name`` is a known model alias (e.g. ``spm32k``)."""
-    return name in ALIASES
+    """True if ``name`` is a known model name or alias (e.g. ``spm32k``)."""
+    return name in MODELS or name in ALIASES
 
 
 def cache_dir() -> Path:
@@ -104,20 +100,21 @@ def _download(url: str, dest: Path) -> None:
             tmp.unlink()
 
 
-def model_path(vocab_size: int, download: bool = True) -> Path:
-    """Return the local path to the identity SPM model for ``vocab_size``.
+def model_path(name: str, download: bool = True) -> Path:
+    """Return the local path to the identity SPM model ``name`` (e.g. ``spm32k``).
 
     Downloads and verifies the model into the cache directory if it is not
     already present (when ``download`` is True).
     """
-    if vocab_size not in MODELS:
+    name = ALIASES.get(name, name)
+    if name not in MODELS:
         raise ValueError(
-            f"Unknown SPM vocab size {vocab_size}; "
+            f"Unknown SPM model {name!r}; "
             f"available: {sorted(MODELS)}"
         )
 
-    filename = f"{vocab_size}.model"
-    expected = MODELS[vocab_size]
+    filename = f"{name}.model"
+    expected = MODELS[name]
 
     # Prefer an existing copy in the cache dir (or MWERALIGN_SPM_DIR).
     cached = cache_dir() / filename
@@ -152,13 +149,13 @@ def resolve(name_or_path: str, download: bool = True) -> str:
     returned unchanged so existing filesystem paths keep working.
     """
     if is_model_name(name_or_path):
-        return str(model_path(ALIASES[name_or_path], download=download))
+        return str(model_path(name_or_path, download=download))
     return name_or_path
 
 
-def download_all(download: bool = True) -> Dict[int, Path]:
-    """Fetch every known model into the cache; returns {vocab_size: path}."""
-    return {vs: model_path(vs, download=download) for vs in sorted(MODELS)}
+def download_all(download: bool = True) -> Dict[str, Path]:
+    """Fetch every known model into the cache; returns {name: path}."""
+    return {name: model_path(name, download=download) for name in MODELS}
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -172,7 +169,7 @@ def main(argv: Optional[list] = None) -> int:
     )
     parser.add_argument(
         "names", nargs="*", metavar="NAME",
-        help=f"Models to fetch ({', '.join(ALIASES)}). Default: all.",
+        help=f"Models to fetch ({', '.join([*MODELS, *ALIASES])}). Default: all.",
     )
     parser.add_argument("--all", action="store_true", help="Fetch all models.")
     args = parser.parse_args(argv)
@@ -180,12 +177,12 @@ def main(argv: Optional[list] = None) -> int:
     try:
         if args.all or not args.names:
             paths = download_all()
-            for vs, p in paths.items():
-                print(f"{vs}: {p}")
+            for name, p in paths.items():
+                print(f"{name}: {p}")
         else:
             for name in args.names:
                 if not is_model_name(name):
-                    print(f"unknown model '{name}'; choices: {', '.join(ALIASES)}",
+                    print(f"unknown model '{name}'; choices: {', '.join([*MODELS, *ALIASES])}",
                           file=sys.stderr)
                     return 2
                 print(f"{name}: {resolve(name)}")
