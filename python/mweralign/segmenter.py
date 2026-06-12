@@ -116,9 +116,10 @@ class CJSegmenter(Segmenter):
         """
 
         # Drop the inter-token separator spaces, restore the encoded spaces, then
-        # un-escape any literal '▁'. No strip(): leading/trailing spaces in the
-        # original text were encoded as '▁' and must survive the round-trip.
-        text = text.replace(" ", "").replace(SPM_SPACE, " ").replace(SPM_SPACE_ESCAPE, SPM_SPACE)
+        # un-escape any literal '▁'. The final strip() removes the segment-merge
+        # separator space that the aligner leaves at a segment boundary (so a
+        # restored segment doesn't gain a spurious leading/trailing space).
+        text = text.replace(" ", "").replace(SPM_SPACE, " ").replace(SPM_SPACE_ESCAPE, SPM_SPACE).strip()
         return text
     
 

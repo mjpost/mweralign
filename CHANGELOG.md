@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-11
+
 ### Added
+- On-demand SentencePiece model download: the pre-trained, character-preserving
+  (identity-normalization) models are published as GitHub Release assets and
+  fetched the first time they are requested by name (`-m spm32k`, `spm64k`,
+  `spm128k`, `spm256k`; `spm` aliases 256k), checksum-verified, and cached under
+  `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`). A standalone
+  `python -m mweralign.models [--all | NAME ...]` pre-fetches them for offline
+  use. The experiment harness (`scripts/experiments/`) reuses the same
+  downloader as a fallback when a local model is not present.
 - Mid-word segmentation boundary constraint for SentencePiece input: a hard,
   opt-in constraint that forbids a non-final segment from ending where the next
   segment would begin on a word-internal, non-punctuation piece, eliminating
