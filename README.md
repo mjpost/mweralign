@@ -38,6 +38,31 @@ or any SentencePiece model, which are provided in the form of a filesystem path:
 
     mweralign -r ref.zh.txt -h hyp.txt -o aligned.txt -t cj
 
+The package ships with pre-trained, character-preserving (identity-normalization)
+SentencePiece models that are downloaded on demand the first time you request them by
+name. Pass `spm32k`, `spm64k`, `spm128k`, or `spm256k` (`spm` is an alias for 256k):
+
+    mweralign -r ref.txt -h hyp.txt -o aligned.txt -t spm32k
+
+The model is fetched from the project's GitHub Release, verified against a checksum, and
+cached under `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`). To pre-fetch
+all sizes (e.g. for offline use):
+
+    python -m mweralign.models --all
+
+**Recommendation:** for the best segmentation quality, use a character-preserving
+(identity-normalization) SentencePiece model for *all* languages, including CJK. In our
+WMT24 experiments an identity SPM model restored the original segmentation far more
+accurately than whitespace tokenization on every language pair, and on the CJK pairs
+(en-ja, en-zh, ja-zh) it clearly outperformed the `cj` character segmenter (~94% vs. ~69%
+boundary accuracy): per-character tokenization gives the aligner too much freedom, whereas
+subword pieces constrain boundaries to sensible word edges. Vocabulary size has little
+effect (32k is sufficient; 128k is marginally best), so a small model is a fine default.
+Note that the flores200 SPM model applies NMT-style normalization that *rewrites*
+characters, so it is unsuitable when you need the original text restored verbatim; use an
+identity-normalization model for that. The `cj` segmenter remains available as a
+dependency-free fallback.
+
     # download the flores200 SPM model (one time)
     sacrebleu -t wmt24 -l en-zh --echo src | sacrebleu -t wmt24 -l en-zh --tok flores200 > /dev/null
     # align

@@ -125,16 +125,27 @@ def spm_model(vocab_size: int = 256000) -> Path:
     """Path to a custom identity-normalization SPM model (paper models).
 
     These use ``--normalization_rule_name identity`` so the character stream is
-    preserved through tokenization, unlike flores200.
+    preserved through tokenization, unlike flores200. If the model is not found
+    in ``MWERALIGN_SPM_DIR``, it is downloaded on demand from the package's
+    GitHub Release (see ``mweralign.models``).
     """
     path = SPM_DIR / f"{vocab_size}.model"
-    if not path.exists():
+    if path.exists():
+        return path
+
+    # Fall back to the package's on-demand downloader (fetches + caches).
+    try:
+        from mweralign import models as _models
+
+        return _models.model_path(vocab_size)
+    except Exception as e:
         raise FileNotFoundError(
-            f"custom SPM model not found at {path}.\n"
+            f"custom SPM model not found at {path} and download failed: {e}\n"
             "Set MWERALIGN_SPM_DIR to the directory holding {32000,64000,"
-            "128000,256000}.model (see scripts/spm-train.sh for the recipe)."
+            "128000,256000}.model, or run "
+            "`python -m mweralign.models --all` to fetch them "
+            "(see scripts/spm-train.sh for the training recipe)."
         )
-    return path
 
 
 def domain_groups(domain_labels: List[str]) -> Dict[str, List[int]]:

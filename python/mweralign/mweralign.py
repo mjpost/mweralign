@@ -22,6 +22,7 @@ from typing import List, NamedTuple, Optional, Tuple
 import sentencepiece as spm
 from ._mweralign import MwerSegmenter as _MwerSegmenter
 from .segmenter import CJSegmenter, SPSegmenter
+from . import models
 
 # load logger
 import logging
@@ -402,7 +403,10 @@ def main():
     parser.add_argument("--docid-file", "-d", type=argparse.FileType("r"), default=None, help="Docid file")
     parser.add_argument('--output', '-o', type=argparse.FileType("w"), default=sys.stdout,
                         help='Output file (default: stdout)')
-    parser.add_argument('--tokenizer', '-m', type=str, default=None, help="Tokenizer to use (path to model or keyword 'cj')")
+    parser.add_argument('--tokenizer', '-m', type=str, default=None,
+                        help="Tokenizer to use: 'cj', a SentencePiece model path, "
+                             "or a named model downloaded on demand "
+                             "(spm32k, spm64k, spm128k, spm256k; 'spm' = 256k).")
     parser.add_argument("--language", "-l", default=None, help="Language being aligned (e.g, en)")
     parser.add_argument("--no-detok", action="store_true", default=False)
     parser.add_argument("--score", action="store_true", default=False,
@@ -426,9 +430,11 @@ def main():
         segmenter = CJSegmenter()
 
     elif args.tokenizer is not None:
-        # Load tokenizer if specified
+        # A named model (e.g. 'spm32k') is fetched/cached on demand; any other
+        # value is treated as a filesystem path to a SentencePiece model.
         try:
-            segmenter = SPSegmenter(args.tokenizer)
+            model = models.resolve(args.tokenizer)
+            segmenter = SPSegmenter(model)
         except Exception as e:
             logger.info(f"Error loading tokenizer: {e}")
             sys.exit(1)
