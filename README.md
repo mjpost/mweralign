@@ -96,7 +96,7 @@ Or for a longer example:
     mweralign % mweralign \
       -r test/data/wmt22.en-de.en \
       -t test/data/wmt22.en-de.sys \
-      -m expt/data/256000.model \
+      -m spm256k \
       -l de \
       -o /dev/null \
       --trace-file -

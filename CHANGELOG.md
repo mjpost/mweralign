@@ -14,8 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `spm128k`, `spm256k`; `spm` aliases 256k), checksum-verified, and cached under
   `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`). A standalone
   `python -m mweralign.models [--all | NAME ...]` pre-fetches them for offline
-  use. The experiment harness (`scripts/experiments/`) reuses the same
-  downloader as a fallback when a local model is not present.
+  use.
 - Mid-word segmentation boundary constraint for SentencePiece input: a hard,
   opt-in constraint that forbids a non-final segment from ending where the next
   segment would begin on a word-internal, non-punctuation piece, eliminating
@@ -33,14 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   segment's end. Off by default and free when unused. Finer-grained per-cell
   edit costs are exposed through the Python API via
   `align_texts_traced(..., cells=True)`.
-- WMT24 regression suite: golden-file cases built from real WMT24 data
-  (`scripts/make_wmt24_regression.py`) exercising whitespace, `cj`, and
-  flores200 segmenters, document-merged realignment (`-d`), and `--score`.
-- Experiment scaffolding under `scripts/experiments/` reproducing the data +
-  alignment + scoring pipeline from Post & Hieu (IWSLT 2025) on WMT24 for all
-  11 language pairs: data access via sacrebleu, domain-merge realignment, and
-  BLEU + chrF (sacrebleu) / COMET22 (PyMarian) / pluggable `gemboid` scoring.
-  Human-judgment correlation is deferred.
+- WMT24 regression suite: golden-file test cases built from real WMT24 data
+  exercising whitespace, `cj`, and flores200 segmenters, document-merged
+  realignment (`-d`), and `--score`.
 
 ### Changed
 - The segment-initial internal-word penalty (the `additionalInsertionCosts`
