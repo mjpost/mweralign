@@ -28,7 +28,7 @@ from . import models
 import logging
 logger = logging.getLogger(__name__)
 # Set up basic logging configuration
-logging.basicConfig(level=logging.INFO, format='mweralign (%(asctime)s) %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format='[mweralign] %(levelname)s: %(message)s')
 
 
 class CellCost(NamedTuple):
