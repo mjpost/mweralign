@@ -18,16 +18,123 @@ limitations under the License.
 """
 
 
-from typing import List, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 import sentencepiece as spm
 from ._mweralign import MwerSegmenter as _MwerSegmenter
 from .segmenter import CJSegmenter, SPSegmenter
+from . import models
 
 # load logger
 import logging
 logger = logging.getLogger(__name__)
 # Set up basic logging configuration
 logging.basicConfig(level=logging.INFO, format='mweralign (%(asctime)s) %(levelname)s %(message)s')
+
+
+class CellCost(NamedTuple):
+    """One Levenshtein cell recorded by the segmentation DP."""
+    j: int            # hypothesis position (1-based)
+    i: int            # reference position (1-based)
+    ref: int          # reference index
+    del_cost: int     # total cost of the deletion option
+    ins_cost: int     # total cost of the insertion option
+    sub_cost: int     # total cost of the substitution option
+    chosen: int       # cost of the option the DP took
+    extra: int        # segment-initial internal-word penalty applied here
+    op: str           # chosen edit: 'S', 'I' or 'D'
+    is_new_sent: bool # whether the cell sits at a segment start
+
+
+class AlignmentTrace:
+    """Structured view of the segmentation DP from a single alignment.
+
+    Captures every competing segment boundary (not just the chosen one), so the
+    backpointer logic can be independently verified. Indexing matches the C++
+    tables: ``boundary_cost[j][s]`` is the best total cost of a segmentation
+    that ends segment ``s`` at hypothesis position ``j``; ``boundary_bp[j][s]``
+    is the hypothesis position where segment ``s-1`` ends in that solution.
+    """
+
+    # Sentinel the DP uses for unreachable boundary cells.
+    UNREACHABLE = 100000000
+
+    def __init__(self, boundary_cost, boundary_bp, boundary_ref,
+                 boundaries, segment_costs, cells):
+        self.boundary_cost = boundary_cost      # BC[j][s]
+        self.boundary_bp = boundary_bp          # BP[j][s]
+        self.boundary_ref = boundary_ref        # BR[j][s]
+        self.boundaries = boundaries            # chosen boundary[s]
+        self.segment_costs = segment_costs      # sentCosts[s]
+        self.cells = [CellCost(*c) for c in cells]
+
+    @property
+    def num_hyp(self) -> int:
+        """Number of hypothesis tokens (J)."""
+        return len(self.boundary_cost) - 1
+
+    @property
+    def num_segments(self) -> int:
+        """Number of segments (S)."""
+        return len(self.boundaries) - 1 if self.boundaries else 0
+
+    def column_candidates(self, s: int) -> List[Tuple[int, int, int]]:
+        """All reachable segment ends for segment ``s``.
+
+        Returns a list of ``(j, cost, bp)`` for every hypothesis position ``j``
+        at which segment ``s`` could end, sorted by increasing cost. The first
+        element is the cheapest boundary the DP could have chosen for ``s``.
+        """
+        out = []
+        for j in range(len(self.boundary_cost)):
+            row = self.boundary_cost[j]
+            if s < len(row):
+                cost = row[s]
+                if cost < self.UNREACHABLE:
+                    out.append((j, cost, self.boundary_bp[j][s]))
+        out.sort(key=lambda t: (t[1], t[0]))
+        return out
+
+    def reconstruct_boundaries(self) -> List[int]:
+        """Independently re-run the backtrace from the boundary tables.
+
+        Follows BP from (j=J, s=S) back to s=0 and returns the segment-end
+        positions. Used by the test suite to confirm the C++ backtrace and the
+        recorded tables agree.
+        """
+        J, S = self.num_hyp, self.num_segments
+        ends = [0] * (S + 1)
+        k, s = J, S
+        while s > 0:
+            ends[s] = self.boundary_bp[k][s]
+            k = self.boundary_bp[k][s]
+            s -= 1
+        return ends
+
+    def chosen_end(self, s: int) -> int:
+        """Hypothesis position at which segment ``s`` ends in the chosen path.
+
+        The C++ ``boundary[s]`` records the end of segment ``s-1``, so segment
+        ``s`` ends at ``boundary[s+1]`` (and the final segment ends at ``J``).
+        """
+        if s >= self.num_segments:
+            return self.num_hyp
+        return self.boundaries[s + 1]
+
+    def format_costs(self, max_segments: Optional[int] = None) -> str:
+        """Human-readable dump of the competing boundary costs per segment."""
+        lines = []
+        S = self.num_segments
+        last = S if max_segments is None else min(S, max_segments)
+        for s in range(1, last + 1):
+            chosen = self.chosen_end(s)
+            cands = self.column_candidates(s)
+            chosen_cost = self.boundary_cost[chosen][s] if chosen < len(self.boundary_cost) else None
+            lines.append(f"segment {s}: chosen end j={chosen} (cost={chosen_cost})")
+            for j, cost, bp in cands[:8]:
+                mark = "  <- chosen" if j == chosen else ""
+                lines.append(f"    end j={j:4d}  cost={cost:6d}  prev_end={bp}{mark}")
+        return "\n".join(lines)
+
 
 class MwerAlign:
     """Python wrapper for Minimum Word Error Rate Alignment."""
@@ -43,6 +150,68 @@ class MwerAlign:
             is_tokenized: True if the texts are tokenized, False otherwise
         """
         self._segmenter.set_tokenized(is_tokenized)
+
+    def set_collect_trace(self, enable: bool, cells: bool = False):
+        """
+        Enable or disable collection of the alignment trace.
+
+        When enabled, the next ``align()`` call records the boundary DP table
+        (O(J*S)), retrievable via ``get_trace()``. Per-cell costs (O(J*I*R)) are
+        large and only meaningful for small diagnostic inputs, so they are off
+        unless ``cells=True``. Disabled by default; the off path adds no
+        measurable cost to alignment.
+
+        Args:
+            enable: True to collect the boundary trace on subsequent alignments
+            cells: True to also record every Levenshtein cell's costs (small
+                inputs only)
+        """
+        self._segmenter.set_collect_trace(enable)
+        self._segmenter.set_collect_cells(enable and cells)
+
+    def get_trace(self) -> AlignmentTrace:
+        """
+        Return the :class:`AlignmentTrace` from the most recent alignment.
+
+        Requires ``set_collect_trace(True)`` to have been set before aligning.
+
+        Returns:
+            The structured trace (boundary tables, chosen boundaries, cells).
+        """
+        return AlignmentTrace(
+            boundary_cost=self._segmenter.trace_boundary_cost(),
+            boundary_bp=self._segmenter.trace_boundary_bp(),
+            boundary_ref=self._segmenter.trace_boundary_ref(),
+            boundaries=list(self._segmenter.boundaries()),
+            segment_costs=list(self._segmenter.segment_costs()),
+            cells=self._segmenter.trace_cells(),
+        )
+
+    def set_legacy_penalty(self, enable: bool):
+        """
+        TEMPORARY: restore the pre-fix penalty behavior.
+
+        When enabled, the segment-initial "internal word" penalty is applied
+        even for untokenized (whitespace) input, reproducing alignments produced
+        before the untokenized-alignment fix.
+
+        Args:
+            enable: True to apply the legacy (paper) penalty behavior
+        """
+        self._segmenter.set_legacy_penalty(enable)
+
+    def set_forbid_midword_boundary(self, enable: bool):
+        """
+        Forbid mid-word segmentation boundaries.
+
+        When enabled, the segmentation DP may not end a non-final segment at a
+        position that would start the following segment on a word-internal,
+        non-punctuation piece. Off by default.
+
+        Args:
+            enable: True to forbid mid-word segmentation boundaries
+        """
+        self._segmenter.set_forbid_midword_boundary(enable)
 
     def align(self, reference: str, hypothesis: str) -> str:
         """
@@ -95,7 +264,9 @@ class MwerAlign:
         return 0.0, ""
 
 
-def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False) -> str:
+def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False,
+                legacy_penalty: bool = False,
+                forbid_midword_boundary: bool = False) -> str:
     """
     Convenience function to align two texts.
     
@@ -103,13 +274,54 @@ def align_texts(reference: str, hypothesis: str, is_tokenized: bool = False) -> 
         reference: Reference text
         hypothesis: Hypothesis text
         is_tokenized: Whether the texts are tokenized (default: False)
+        legacy_penalty: Restore the pre-fix penalty behavior (default: False)
+        forbid_midword_boundary: Forbid mid-word segmentation boundaries
+            (default: False)
         
     Returns:
         Alignment result
     """
     aligner = MwerAlign()
     aligner.set_tokenized(is_tokenized)
+    if legacy_penalty:
+        aligner.set_legacy_penalty(True)
+    if forbid_midword_boundary:
+        aligner.set_forbid_midword_boundary(True)
     return aligner.align(reference, hypothesis)
+
+
+def align_texts_traced(reference: str, hypothesis: str, is_tokenized: bool = False,
+                       legacy_penalty: bool = False,
+                       forbid_midword_boundary: bool = False,
+                       cells: bool = False) -> Tuple[str, AlignmentTrace]:
+    """
+    Align two texts and also return the segmentation DP trace.
+
+    Identical to :func:`align_texts` but with trace collection enabled, so the
+    competing segment boundaries (and, with ``cells=True``, per-cell costs) are
+    available for inspection or testing.
+
+    Args:
+        reference: Reference text
+        hypothesis: Hypothesis text
+        is_tokenized: Whether the texts are tokenized (default: False)
+        legacy_penalty: Restore the pre-fix penalty behavior (default: False)
+        forbid_midword_boundary: Forbid mid-word segmentation boundaries
+            (default: False)
+        cells: Also record per-cell costs (O(J*I*R); small inputs only)
+
+    Returns:
+        Tuple of (alignment result, :class:`AlignmentTrace`).
+    """
+    aligner = MwerAlign()
+    aligner.set_tokenized(is_tokenized)
+    if legacy_penalty:
+        aligner.set_legacy_penalty(True)
+    if forbid_midword_boundary:
+        aligner.set_forbid_midword_boundary(True)
+    aligner.set_collect_trace(True, cells=cells)
+    result = aligner.align(reference, hypothesis)
+    return result, aligner.get_trace()
 
 
 def score_tokens(ref_tokens: List[str], hyp_tokens: List[str]) -> Tuple[int, int, int]:
@@ -191,12 +403,23 @@ def main():
     parser.add_argument("--docid-file", "-d", type=argparse.FileType("r"), default=None, help="Docid file")
     parser.add_argument('--output', '-o', type=argparse.FileType("w"), default=sys.stdout,
                         help='Output file (default: stdout)')
-    parser.add_argument('--tokenizer', '-m', type=str, default=None, help="Tokenizer to use (path to model or keyword 'cj')")
+    parser.add_argument('--tokenizer', '-m', type=str, default=None,
+                        help="Tokenizer to use: 'cj', a SentencePiece model path, "
+                             "or a named model downloaded on demand "
+                             "(spm32k, spm64k, spm128k, spm256k; 'spm' = 256k).")
     parser.add_argument("--language", "-l", default=None, help="Language being aligned (e.g, en)")
     parser.add_argument("--no-detok", action="store_true", default=False)
     parser.add_argument("--score", action="store_true", default=False,
                         help="Scoring mode: ref and hyp are already aligned line-by-line; "
                              "report per-segment and corpus WER instead of aligning.")
+    parser.add_argument("--legacy-penalty", action="store_true", default=False,
+                        help="TEMPORARY: restore the pre-fix penalty behavior (apply the "
+                             "segment-initial internal-word penalty even for untokenized "
+                             "input). Used to reproduce pre-fix (paper) results.")
+    parser.add_argument("--trace-file", type=argparse.FileType("w"), default=None,
+                        help="Collect the segmentation DP trace and write a human-readable "
+                             "dump of the competing segment-boundary costs to this file "
+                             "('-' for stdout). Off by default; adds no cost when unused.")
     args = parser.parse_args()
 
     refs = [line.strip() for line in args.ref_file.readlines()]
@@ -207,9 +430,11 @@ def main():
         segmenter = CJSegmenter()
 
     elif args.tokenizer is not None:
-        # Load tokenizer if specified
+        # A named model (e.g. 'spm32k') is fetched/cached on demand; any other
+        # value is treated as a filesystem path to a SentencePiece model.
         try:
-            segmenter = SPSegmenter(args.tokenizer)
+            model = models.resolve(args.tokenizer)
+            segmenter = SPSegmenter(model)
         except Exception as e:
             logger.info(f"Error loading tokenizer: {e}")
             sys.exit(1)
@@ -293,6 +518,9 @@ def main():
     # appear to be internal because there was no whitespace.
     is_tokenized = type(segmenter) is SPSegmenter and args.language not in ["ja", "zh"]
 
+    trace_out = sys.stderr if args.trace_file is None else args.trace_file
+    collect_trace = args.trace_file is not None
+
     for i, (docid_start, docid_end) in enumerate(docid_ranges):
         hyp_str = tokenize_and_join([hyps[i]])
         ref_str = tokenize_and_join(refs[docid_start:docid_end])
@@ -301,8 +529,19 @@ def main():
 
         # Perform alignment
         try:
-            result = align_texts(ref_str, hyp_str, is_tokenized=is_tokenized)
-            
+            if collect_trace:
+                result, trace = align_texts_traced(
+                    ref_str, hyp_str, is_tokenized=is_tokenized,
+                    legacy_penalty=args.legacy_penalty,
+                    forbid_midword_boundary=is_tokenized)
+                print(f"# docid range {i} (segments {docid_start}-{docid_end})",
+                      file=trace_out)
+                print(trace.format_costs(), file=trace_out)
+            else:
+                result = align_texts(ref_str, hyp_str, is_tokenized=is_tokenized,
+                                     legacy_penalty=args.legacy_penalty,
+                                     forbid_midword_boundary=is_tokenized)
+
             # Output result
             for line in result.split("\n"):
                 if segmenter is not None and not args.no_detok:

@@ -38,6 +38,31 @@ or any SentencePiece model, which are provided in the form of a filesystem path:
 
     mweralign -r ref.zh.txt -h hyp.txt -o aligned.txt -t cj
 
+The package ships with pre-trained, character-preserving (identity-normalization)
+SentencePiece models that are downloaded on demand the first time you request them by
+name. Pass `spm32k`, `spm64k`, `spm128k`, or `spm256k` (`spm` is an alias for 256k):
+
+    mweralign -r ref.txt -h hyp.txt -o aligned.txt -t spm32k
+
+The model is fetched from the project's GitHub Release, verified against a checksum, and
+cached under `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`). To pre-fetch
+all sizes (e.g. for offline use):
+
+    python -m mweralign.models --all
+
+**Recommendation:** for the best segmentation quality, use a character-preserving
+(identity-normalization) SentencePiece model for *all* languages, including CJK. In our
+WMT24 experiments an identity SPM model restored the original segmentation far more
+accurately than whitespace tokenization on every language pair, and on the CJK pairs
+(en-ja, en-zh, ja-zh) it clearly outperformed the `cj` character segmenter (~94% vs. ~69%
+boundary accuracy): per-character tokenization gives the aligner too much freedom, whereas
+subword pieces constrain boundaries to sensible word edges. Vocabulary size has little
+effect (32k is sufficient; 128k is marginally best), so a small model is a fine default.
+Note that the flores200 SPM model applies NMT-style normalization that *rewrites*
+characters, so it is unsuitable when you need the original text restored verbatim; use an
+identity-normalization model for that. The `cj` segmenter remains available as a
+dependency-free fallback.
+
     # download the flores200 SPM model (one time)
     sacrebleu -t wmt24 -l en-zh --echo src | sacrebleu -t wmt24 -l en-zh --tok flores200 > /dev/null
     # align
@@ -48,6 +73,54 @@ AS-WER algorithm not to prevent sentences from starting with the SentencePiece s
 languages, it has no effect.
 
     mweralign -r ref.txt -h hyp.txt -o aligned.txt -t cj -l zh
+
+When a SentencePiece model is used to tokenize a non-CJK language, the aligner also forbids
+*mid-word* segment boundaries: no output segment may begin on a word-internal sub-word piece
+(one lacking the leading `▁` marker), so re-segmenting never splits a word across two segments.
+This is automatic and requires no flag. Pure-punctuation pieces are exempt, since they
+legitimately attach to the preceding token.
+
+### Inspecting the segmentation scores
+
+The aligner chooses where to split the hypothesis stream with a dynamic program. You can dump
+the competing segment-boundary costs it considered with `--trace-file`. Pass `-` to write the
+trace to stdout, or a path to write it to a file. It is off by default and adds no cost when
+unused.
+
+    printf 'the cat sat\non the mat\n' > /tmp/ref.txt
+    printf 'the cat\nsat on the mat\n' > /tmp/hyp.txt
+    mweralign -r /tmp/ref.txt -t /tmp/hyp.txt -o /dev/null --trace-file - 2>/dev/null
+
+Or for a longer example:
+
+    mweralign % mweralign \
+      -r test/data/wmt22.en-de.en \
+      -t test/data/wmt22.en-de.sys \
+      -m spm256k \
+      -l de \
+      -o /dev/null \
+      --trace-file -
+
+For each segment, the trace lists the chosen end position and every candidate end position with
+its cost and the previous segment's end (`prev_end`):
+
+    # docid range 0 (segments 0-2)
+    segment 1: chosen end j=3 (cost=0)
+        end j=   0  cost=     0  prev_end=0
+        end j=   3  cost=     0  prev_end=0  <- chosen
+        end j=   2  cost=     1  prev_end=0
+        ...
+    segment 2: chosen end j=6 (cost=0)
+        end j=   6  cost=     0  prev_end=3  <- chosen
+        ...
+
+Here `j` is a position in the (tokenized) hypothesis stream, so `segment 1` covers hyp tokens
+1..3 and `segment 2` covers 4..6. The alignment output itself still goes to `-o` (sent to
+`/dev/null` above so only the trace is shown); `2>/dev/null` suppresses the `AS-WER` line.
+
+The trace above is the boundary-cost table (cheap to record). Finer-grained per-cell edit costs
+are available only through the Python API, `align_texts_traced(..., cells=True)`, since they grow
+with the full alignment grid and are impractical to print for long inputs.
 
 ## Project layout
 

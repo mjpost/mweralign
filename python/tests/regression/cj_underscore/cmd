@@ -1,0 +1,1 @@
+-r ref.txt -t hyp.txt -m cj -l zh

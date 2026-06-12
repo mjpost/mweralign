@@ -5,6 +5,57 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-11
+
+### Added
+- On-demand SentencePiece model download: the pre-trained, character-preserving
+  (identity-normalization) models are published as GitHub Release assets and
+  fetched the first time they are requested by name (`-m spm32k`, `spm64k`,
+  `spm128k`, `spm256k`; `spm` aliases 256k), checksum-verified, and cached under
+  `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`). A standalone
+  `python -m mweralign.models [--all | NAME ...]` pre-fetches them for offline
+  use.
+- Mid-word segmentation boundary constraint for SentencePiece input: a hard,
+  opt-in constraint that forbids a non-final segment from ending where the next
+  segment would begin on a word-internal, non-punctuation piece, eliminating
+  mid-word segment cuts. Unlike the per-cell internal-word penalty it acts on
+  the segmentation boundary itself (the merge step), so the dynamic program
+  cannot route around it; it drives the mid-word cut rate to ~0% (versus the
+  ~22% reduction the penalty achieved). Auto-activated whenever a SentencePiece
+  model tokenizes a non-CJK language (no user flag); also exposed via
+  `MwerAlign.set_forbid_midword_boundary()` and
+  `align_texts(..., forbid_midword_boundary=)`. Pure-punctuation pieces are
+  exempt (they legitimately attach to the previous token).
+- Segmentation DP trace: `--trace-file` (use `-` for stdout) dumps the
+  competing segment-boundary costs the aligner considered, listing each
+  segment's chosen end and every candidate end with its cost and the previous
+  segment's end. Off by default and free when unused. Finer-grained per-cell
+  edit costs are exposed through the Python API via
+  `align_texts_traced(..., cells=True)`.
+- WMT24 regression suite: golden-file test cases built from real WMT24 data
+  exercising whitespace, `cj`, and flores200 segmenters, document-merged
+  realignment (`-d`), and `--score`.
+
+### Changed
+- The segment-initial internal-word penalty (the `additionalInsertionCosts`
+  +1000 cost and its sibling `extra_cost` term) is now gated behind the
+  `legacyPenalty_` flag only, instead of firing for all tokenized input. The
+  penalty acts on the segment-initial *reference* alignment cell rather than on
+  the output segmentation boundary, so the alignment could still begin an output
+  segment mid-word by absorbing the fragment elsewhere. The new mid-word
+  boundary constraint now owns mid-word-cut prevention for the normal and
+  SentencePiece paths; the penalty is retained only to reproduce the pre-fix
+  (paper) numbers.
+
+### Fixed
+- `cj` segmenter dropped literal underscores: it previously mapped spaces to `_`
+  to preserve whitespace, so any literal `_` in the input (e.g. inside URLs or
+  identifiers like `WxsYTK8l_Gk` or `user_name_123`) was turned into a space on
+  detokenization. Spaces are now represented with the SentencePiece meta-symbol
+  `▁` (U+2581), which never occurs in normal text, so the segmenter round-trips
+  any input faithfully without escaping. A rare literal `▁` in the input is
+  escaped so it is never confused with an encoded space.
+
 ## [1.2.0] - 2026-06-05
 
 ### Added

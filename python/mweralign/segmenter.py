@@ -54,6 +54,16 @@ def is_latin1(c):
     return ord(c) <= 0x00FF
 
 
+# SentencePiece meta-symbol used to represent a space (U+2581, "LOWER ONE EIGHTH
+# BLOCK"). It does not occur in normal text, so it can stand in for spaces
+# without colliding with any literal input character (e.g. an actual '_').
+SPM_SPACE = "\u2581"
+
+# Sentinel used to escape a *literal* '▁' that already appears in the input, so
+# it is not later mistaken for an encoded space. NUL never occurs in real text.
+SPM_SPACE_ESCAPE = "\x00"
+
+
 class CJSegmenter(Segmenter):
     """
     A segmenter that tokenizes text based on Latin-1 characters and Han characters.
@@ -69,17 +79,22 @@ class CJSegmenter(Segmenter):
         treat each Latin1 word as a token, and insert whitespace in between.
         """
 
-        # preserve existing whitespaces
-        text = text.replace(" ", "_")
+        # Escape any literal '▁' already in the input so it is not confused with
+        # the encoded spaces inserted below, then preserve existing whitespace by
+        # mapping spaces to the SentencePiece meta-symbol '▁'. '▁' never occurs in
+        # normal text and so cannot be confused with a literal input character
+        # (e.g. an actual '_'); the rare literal '▁' is handled by the escape.
+        text = text.replace(SPM_SPACE, SPM_SPACE_ESCAPE)
+        text = text.replace(" ", SPM_SPACE)
 
         tokens = []
         i = 0
         while i < len(text):
             c = text[i]
-            if is_latin1(c):
-                # Move forward over a Latin1 word
+            if is_latin1(c) or c == SPM_SPACE:
+                # Move forward over a Latin1 word, keeping attached spaces ('▁')
                 start = i
-                while i < len(text) and is_latin1(text[i]):
+                while i < len(text) and (is_latin1(text[i]) or text[i] == SPM_SPACE):
                     i += 1
                 tokens.append(text[start:i])
             else:
@@ -100,7 +115,11 @@ class CJSegmenter(Segmenter):
             Decoded string
         """
 
-        text = text.replace(" ", "").replace("_", " ").strip()  # restore spaces
+        # Drop the inter-token separator spaces, restore the encoded spaces, then
+        # un-escape any literal '▁'. The final strip() removes the segment-merge
+        # separator space that the aligner leaves at a segment boundary (so a
+        # restored segment doesn't gain a spurious leading/trailing space).
+        text = text.replace(" ", "").replace(SPM_SPACE, " ").replace(SPM_SPACE_ESCAPE, SPM_SPACE).strip()
         return text
     
 

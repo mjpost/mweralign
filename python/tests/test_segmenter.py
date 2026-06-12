@@ -27,18 +27,18 @@ class TestIsLatin1:
 class TestCJSegmenter:
     """Test the CJSegmenter class.
 
-    ``encode`` preserves whitespace by replacing it with ``_`` so it can be
-    restored on ``decode``. Runs of Latin-1 characters become a single token,
-    while every non-Latin-1 (e.g. Han) character is its own token. ``decode``
-    takes the space-joined token string the aligner produces and reconstructs
-    the original text.
+    ``encode`` preserves whitespace by replacing it with the SentencePiece
+    meta-symbol ``▁`` (U+2581) so it can be restored on ``decode``. Runs of
+    Latin-1 characters become a single token, while every non-Latin-1 (e.g.
+    Han) character is its own token. ``decode`` takes the space-joined token
+    string the aligner produces and reconstructs the original text.
     """
 
     def setup_method(self):
         self.segmenter = CJSegmenter()
 
     def test_encode_latin1_words(self):
-        assert self.segmenter.encode("hello world") == ["hello_world"]
+        assert self.segmenter.encode("hello world") == ["hello\u2581world"]
 
     def test_encode_chinese_characters(self):
         assert self.segmenter.encode("中国") == ["中", "国"]
@@ -47,16 +47,16 @@ class TestCJSegmenter:
         assert self.segmenter.encode("hello中国world") == ["hello", "中", "国", "world"]
 
     def test_encode_mixed_with_spaces(self):
-        assert self.segmenter.encode("hello 中国 world") == ["hello_", "中", "国", "_world"]
+        assert self.segmenter.encode("hello 中国 world") == ["hello\u2581", "中", "国", "\u2581world"]
 
     def test_encode_empty_string(self):
         assert self.segmenter.encode("") == []
 
     def test_encode_only_spaces(self):
-        assert self.segmenter.encode("   ") == ["___"]
+        assert self.segmenter.encode("   ") == ["\u2581\u2581\u2581"]
 
     def test_encode_punctuation(self):
-        assert self.segmenter.encode("hello, world!") == ["hello,_world!"]
+        assert self.segmenter.encode("hello, world!") == ["hello,\u2581world!"]
 
     def test_decode_latin1_tokens(self):
         # decode receives the space-joined token string from the aligner
@@ -69,8 +69,8 @@ class TestCJSegmenter:
         assert self.segmenter.decode("hello 中 国 world") == "hello中国world"
 
     def test_decode_restores_spaces(self):
-        # underscores stand in for the original whitespace
-        assert self.segmenter.decode("hello_world") == "hello world"
+        # the meta-symbol '▁' stands in for the original whitespace
+        assert self.segmenter.decode("hello\u2581world") == "hello world"
 
     def test_decode_empty_string(self):
         assert self.segmenter.decode("") == ""
@@ -85,6 +85,32 @@ class TestCJSegmenter:
 
     def test_roundtrip_chinese(self):
         text = "中国日本"
+        tokens = self.segmenter.encode(text)
+        assert self.segmenter.decode(" ".join(tokens)) == text
+
+    @pytest.mark.parametrize("text", [
+        "看视频 WxsYTK8l_Gk 结束",      # literal underscore inside a URL/id
+        "a_b c",                         # underscore between Latin tokens
+        "__double__ and 中文_混合",      # underscores adjacent to Han characters
+    ])
+    def test_roundtrip_preserves_literal_underscore(self, text):
+        # Spaces are encoded with the SentencePiece meta-symbol '▁', so literal
+        # underscores pass through untouched and round-trip faithfully
+        # (regression for them previously becoming spaces).
+        tokens = self.segmenter.encode(text)
+        assert self.segmenter.decode(" ".join(tokens)) == text
+
+    @pytest.mark.parametrize("text", [
+        "literal ▁ meta symbol",   # a literal U+2581 (the space placeholder)
+        "▁leading",                # literal ▁ at the start
+        "trailing▁",               # literal ▁ at the end
+        "中▁文",                    # literal ▁ between Han characters
+    ])
+    def test_roundtrip_preserves_literal_meta_symbol(self, text):
+        # A literal '▁' is escaped on encode so it is not confused with an
+        # encoded space, and restored on decode (regression for it previously
+        # collapsing to a space). Note decode() still strips outer whitespace,
+        # since a segment-merge separator can leave a spurious edge space.
         tokens = self.segmenter.encode(text)
         assert self.segmenter.decode(" ".join(tokens)) == text
 

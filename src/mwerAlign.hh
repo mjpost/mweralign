@@ -46,6 +46,25 @@ class MwerSegmenter
     {
     };
 
+    /** A single recorded Levenshtein cell from the segmentation DP.
+     *
+     * Only populated when trace collection is enabled (see setCollectTrace()).
+     * Lets callers inspect, per hypothesis/reference position, the competing
+     * edit costs the DP considered and which one (and what penalty) it chose.
+     **/
+    struct CellCost {
+        unsigned int j;        ///< hypothesis position (1-based)
+        unsigned int i;        ///< reference position  (1-based)
+        unsigned int ref;      ///< reference index
+        unsigned int del_cost; ///< total cost of the deletion option
+        unsigned int ins_cost; ///< total cost of the insertion option
+        unsigned int sub_cost; ///< total cost of the substitution option
+        unsigned int chosen;   ///< cost of the option the DP took
+        unsigned int extra;    ///< segment-initial internal-word penalty applied here
+        char op;               ///< chosen edit: 'S', 'I' or 'D'
+        bool is_new_sent;      ///< whether this cell is at a segment start
+    };
+
   private:
     /** Init internal reference sentence structures.
      * To be called from loadRefs(), after reference sentences
@@ -72,6 +91,18 @@ class MwerSegmenter
     bool usecase;
     bool referencesAreOk;
     bool segmenting;
+    // TEMPORARY: when true, restore the pre-fix (paper) behavior where the
+    // segment-initial "internal word" penalty fires regardless of the
+    // segmenting flag. Used to reproduce results produced before the
+    // untokenized-alignment fix. See setLegacyPenalty().
+    bool legacyPenalty_;
+
+    // When true, the segmentation DP is forbidden from placing a boundary that
+    // would start a (non-final) segment on a word-internal, non-punctuation
+    // piece -- i.e. no mid-word cuts. Opt-in; off by default. Unlike the
+    // per-cell internal-word penalty, this is a hard constraint on the
+    // segmentation boundary itself. See setForbidMidwordBoundary().
+    bool forbidMidwordBoundary_;
 
     const std::string underscoreWord = "▁";
 
@@ -84,6 +115,19 @@ class MwerSegmenter
     mutable std::vector<unsigned int> boundary;
     mutable std::vector<unsigned int> sentCosts;
 
+    // --- Optional alignment trace (opt-in; zero overhead when disabled) ---
+    // When collectTrace_ is false the DP touches none of the storage below and
+    // pays only a single (statically predicted-not-taken) branch per cell.
+    // Boundary tables are O(J*S) and cheap; per-cell costs are O(J*I*R) and are
+    // gated behind the separate collectCells_ flag so the boundary trace stays
+    // usable on real (long) inputs.
+    mutable bool collectTrace_ = false;
+    mutable bool collectCells_ = false;
+    mutable std::vector<std::vector<unsigned int>> traceBC_; ///< BC[j][s]: best cost ending segment s at hyp pos j
+    mutable std::vector<std::vector<unsigned int>> traceBP_; ///< BP[j][s]: backpointer (end of segment s-1)
+    mutable std::vector<std::vector<unsigned int>> traceBR_; ///< BR[j][s]: best reference index
+    mutable std::vector<CellCost> traceCells_;               ///< per-cell edit costs (large; debug-only)
+
     double computeSpecialWER(const std::vector<std::vector<unsigned int>> &ref_ids,
                              const std::vector<unsigned int> &hyp_ids, unsigned int nSegments) const;
     unsigned int getVocIndex(const std::string &word) const;
@@ -95,11 +139,12 @@ class MwerSegmenter
     unsigned int getDeletionCosts(const unsigned int w) const;
     void fillPunctuationSet();
     bool isInternal(const unsigned int w) const;
+    bool isInternalWord(const unsigned int w) const;
 
   public:
     MwerSegmenter()
         : maxER_(-1), human_(false), ins_(1), del_(1), refLength_(0), vocCounter_(0), usecase(false),
-          referencesAreOk(false), segmenting(false)
+          referencesAreOk(false), segmenting(false), legacyPenalty_(false), forbidMidwordBoundary_(false)
     {
         fillPunctuationSet();
     }
@@ -128,6 +173,76 @@ class MwerSegmenter
      * \param b \em true: Tokenize \b references \em false: do not tokenize references
      **/
     void setsegmenting(bool s) { segmenting = s; }
+
+    /** TEMPORARY: restore the pre-fix penalty behavior.
+     * When enabled, the segment-initial "internal word" penalty is applied even
+     * for untokenized (whitespace) input, reproducing results generated before
+     * the alignment fix. Off by default.
+     * \param b \em true: apply the penalty unconditionally (legacy/paper behavior)
+     **/
+    void setLegacyPenalty(bool b) { legacyPenalty_ = b; }
+
+    /** Enable or disable the hard mid-word boundary constraint.
+     *
+     * When enabled, the segmentation DP is forbidden from ending a non-final
+     * segment at a position that would start the following segment on a
+     * word-internal, non-punctuation piece (a mid-word cut). Off by default;
+     * preserves existing behavior when disabled.
+     * \param b \em true: forbid mid-word segmentation boundaries
+     **/
+    void setForbidMidwordBoundary(bool b) { forbidMidwordBoundary_ = b; }
+
+    /** \return whether the hard mid-word boundary constraint is enabled. */
+    bool forbidMidwordBoundary() const { return forbidMidwordBoundary_; }
+
+    /** Enable or disable collection of the alignment trace.
+     *
+     * When enabled, the next call to evaluate()/mwerAlign() records the full
+     * boundary DP table (cost, backpointer and best reference for every
+     * candidate segment end) and every Levenshtein cell's competing costs.
+     * Disabled by default; when disabled the DP pays no measurable cost.
+     * \param b \em true: collect the trace; \em false: do not (default)
+     **/
+    void setCollectTrace(bool b) { collectTrace_ = b; }
+
+    /** \return whether trace collection is currently enabled **/
+    bool collectTrace() const { return collectTrace_; }
+
+    /** Enable or disable per-cell cost recording.
+     *
+     * Per-cell costs are O(J*I*R) and only meaningful for small/diagnostic
+     * inputs; the boundary tables (O(J*S)) are recorded whenever
+     * setCollectTrace(true) is set, independent of this flag. Disabled by
+     * default.
+     * \param b \em true: also record every Levenshtein cell's costs
+     **/
+    void setCollectCells(bool b) { collectCells_ = b; }
+
+    /** \return whether per-cell cost recording is currently enabled **/
+    bool collectCells() const { return collectCells_; }
+
+    /** Boundary cost table from the last traced alignment: BC[j][s] is the best
+     * total cost of a segmentation that ends segment \c s at hypothesis
+     * position \c j. Empty unless setCollectTrace(true) was set. **/
+    const std::vector<std::vector<unsigned int>> &traceBoundaryCost() const { return traceBC_; }
+
+    /** Boundary backpointer table: BP[j][s] is the hypothesis position at which
+     * segment \c s-1 ends in the best segmentation ending segment \c s at \c j. **/
+    const std::vector<std::vector<unsigned int>> &traceBoundaryBP() const { return traceBP_; }
+
+    /** Best-reference table: BR[j][s] is the reference index chosen for the
+     * segment ending at \c j with segment count \c s. **/
+    const std::vector<std::vector<unsigned int>> &traceBoundaryRef() const { return traceBR_; }
+
+    /** Per-cell edit costs recorded during the last traced alignment. **/
+    const std::vector<CellCost> &traceCells() const { return traceCells_; }
+
+    /** Chosen segment boundaries from the last alignment: boundary[s] is the
+     * hypothesis position at which segment \c s-1 ends. **/
+    const std::vector<unsigned int> &boundaries() const { return boundary; }
+
+    /** Cumulative segment costs from the last alignment. **/
+    const std::vector<unsigned int> &segmentCosts() const { return sentCosts; }
 
     /** Load reference sentences from file in mref format
      * (i.e. multiple refererences separated by a '#' in each line)

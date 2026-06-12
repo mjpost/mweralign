@@ -3,9 +3,25 @@
 /* Richard Zens                                                     */
 /* ---------------------------------------------------------------- */
 #include "mwerAlign.hh"
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
+// Branch hint so the opt-in trace checks in the hot DP loop are statically
+// predicted not-taken and cost effectively nothing when tracing is disabled.
+#if defined(__GNUC__) || defined(__clang__)
+#define MWER_UNLIKELY(x) (__builtin_expect(!!(x), 0))
+#else
+#define MWER_UNLIKELY(x) (x)
+#endif
+
+// Penalty added to a segmentation boundary that would start the next segment on
+// a word-internal piece, when the hard boundary constraint is enabled. Chosen
+// far above any real word-error gain (segment costs are O(tens)) yet small
+// enough that accumulation across a document's segments stays well below the
+// merge sentinel (1e8), avoiding overflow of the unsigned cost.
+static const unsigned int MIDWORD_FORBID = 100000u;
 
 using namespace std;
 
@@ -249,16 +265,38 @@ bool MwerSegmenter::isInternal(const unsigned int w) const
     return result;
 }
 
+/**
+ * Whether a piece is a word-internal *word* fragment: internal (lacks the
+ * leading word marker) AND not pure punctuation. Pure-punctuation pieces (e.g.
+ * ".", "...", ".\"") legitimately attach to the previous token and are not the
+ * mid-word cuts the boundary constraint targets, so they are excluded.
+ */
+bool MwerSegmenter::isInternalWord(const unsigned int w) const
+{
+    if (!isInternal(w))
+        return false;
+    const std::string word = getVocWord(w);
+    for (unsigned char c : word) {
+        // A non-ASCII byte (a multibyte letter/CJK char) or an ASCII
+        // alphanumeric means this piece carries word material.
+        if (c >= 128 || std::isalnum(c))
+            return true;
+    }
+    return false; // all bytes are ASCII punctuation/symbols
+}
+
 unsigned int MwerSegmenter::additionalInsertionCosts(const unsigned int ref_next, const unsigned int ref_prev, bool is_new_sent,
                                                      const unsigned int w) const
 {
-    // large cost if we're putting an internal word at the start of a sentence.
-    // This only makes sense when the input is tokenized (e.g. with SentencePiece),
-    // where word-internal pieces lack the leading marker. With plain whitespace
-    // input every word looks "internal" (isInternal() == true), so without the
-    // segmenting guard this penalty would fire on every segment-initial insertion
-    // and corrupt the alignment.
-    if (segmenting && is_new_sent && isInternal(w)) {
+    // Legacy-only penalty for putting a word-internal piece at a segment start.
+    // This was the original (paper) mechanism for discouraging mid-word segment
+    // breaks, but it acts on the *alignment* cell (the segment-initial reference
+    // row) rather than on the segmentation *boundary*, so the DP can route
+    // around it and start an output segment mid-word anyway. The hard mid-word
+    // boundary constraint (forbidMidwordBoundary_) supersedes it for the normal
+    // and SentencePiece paths; this penalty is retained only to reproduce the
+    // pre-fix (paper) numbers under legacyPenalty_.
+    if (legacyPenalty_ && is_new_sent && isInternal(w)) {
         return 1000;
     }
 
@@ -277,6 +315,14 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
     unsigned int S = nSegments;
     std::vector<std::vector<unsigned int>> BP(J + 1), BC(J + 1);
     std::vector<std::vector<unsigned short>> BR(J + 1);
+    // Index 0 of the backpointer tables is never written in the main loop (which
+    // runs j = 1..J), but the backtracking below can follow a backpointer to
+    // hyp-position 0 while segments remain. Pre-size row 0 so that access is
+    // in-bounds (and yields a benign 0) instead of reading an empty vector and
+    // crashing -- this happens with the legacy penalty on long merged inputs.
+    BP[0].resize(S + 1);
+    BC[0].resize(S + 1);
+    BR[0].resize(S + 1);
     std::vector<std::vector<DP>> m(R), mnew(R);
     boundary.resize(S + 1);
     sentCosts.resize(S + 1);
@@ -287,6 +333,19 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
 
     if (J == 0)
         return 0;
+
+    // Clear stale trace state from a previous alignment. traceCells_ is gated by
+    // collectCells_ (independent of collectTrace_), so it must be cleared
+    // whenever either flag is set, or per-cell records would accumulate across
+    // alignments when collectCells_ is enabled without collectTrace_.
+    if (MWER_UNLIKELY(collectTrace_ || collectCells_)) {
+        traceCells_.clear();
+        if (collectTrace_) {
+            traceBC_.clear();
+            traceBP_.clear();
+            traceBR_.clear();
+        }
+    }
 
     for (size_t r = 0; r < R; ++r) { // initialization along reference axis i for all references
         m[r].resize(I + 1);
@@ -327,8 +386,11 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
                     m[r][i - 1] = mnew[r][0];
                 } else {
                     // do compute next step in the LEVENSHTEIN distance
-                    // add a large cost if this is the start of sentence and the word is internal
-                    float extra_cost = (segmenting && is_new_sent && isInternal(hyp_ids[j - 1]) ? 1000 : 0);
+                    // Legacy-only: large cost for a word-internal piece at a
+                    // segment-initial reference row (paper reproduction). The
+                    // hard mid-word boundary constraint now owns mid-word-cut
+                    // prevention for the normal/SentencePiece paths.
+                    float extra_cost = (legacyPenalty_ && is_new_sent && isInternal(hyp_ids[j - 1]) ? 1000 : 0);
 
                     del = mnew[r][0].cost + getDeletionCosts(ref_ids[r][i - 1]) + extra_cost;
                     ins = m[r][i].cost + getInsertionCosts(hyp_ids[j - 1]) +
@@ -356,6 +418,21 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
                     }
                     m[r][i - 1] = mnew[r][0]; // finalize saving of the previous entry
                     mnew[r][0] = mnew[r][1];  // move the current entry up the stack
+
+                    if (MWER_UNLIKELY(collectCells_)) {
+                        // Re-derive the chosen edit op using the same priority
+                        // (substitution preferred, then deletion on a tie with
+                        // insertion) so the trace matches the selection above.
+                        char op;
+                        if (sub < del)
+                            op = (sub < ins) ? 'S' : 'I';
+                        else
+                            op = (del <= ins) ? 'D' : 'I';
+                        traceCells_.push_back(CellCost{
+                            (unsigned int)j, (unsigned int)i, (unsigned int)r,
+                            del, ins, sub, mnew[r][1].cost,
+                            (unsigned int)extra_cost, op, is_new_sent});
+                    }
                 }
                 if (merge)
                     // segmentation word is the same in all references
@@ -369,12 +446,29 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
             if (merge) {
                 // segment end, merge
                 ++s;
-                BC[j][s] = min;
+                // Hard boundary constraint (opt-in): a non-final segment may not
+                // end here if doing so would start the *next* segment on a
+                // word-internal, non-punctuation piece (a mid-word cut). The
+                // boundary is at hyp position j, so the next segment begins at
+                // piece hyp_ids[j]. We make such boundaries prohibitively
+                // expensive; the penalty is carried forward (mnew) so any path
+                // through a mid-word boundary loses the global minimization. The
+                // constant is far above any achievable word-error gain yet small
+                // enough that accumulation stays well under the merge sentinel.
+                //
+                // Only meaningful for tokenized (SentencePiece) input: with
+                // plain whitespace input every word lacks the leading marker and
+                // so looks "internal", which would forbid every boundary. The
+                // `segmenting` guard mirrors the per-cell internal-word penalty.
+                unsigned int boundaryPenalty = 0;
+                if (forbidMidwordBoundary_ && segmenting && s < S && j < J && isInternalWord(hyp_ids[j]))
+                    boundaryPenalty = MIDWORD_FORBID;
+                BC[j][s] = min + boundaryPenalty;
                 BP[j][s] = argmin;
                 BR[j][s] = bestRef;
                 //     std::cerr << "MERGE: " << min << " " << argmin << "\n";
                 for (size_t r = 0; r < R; ++r) {
-                    mnew[r][0].cost = min;
+                    mnew[r][0].cost = min + boundaryPenalty;
                     mnew[r][0].bp = j;
                 }
             }
@@ -382,6 +476,16 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
         for (size_t r = 0; r < R; ++r) {
             m[r][I] = mnew[r][0]; // make the stack empty by filling in the last values
         }
+    }
+
+    if (MWER_UNLIKELY(collectTrace_)) {
+        // Snapshot the full boundary DP tables so callers can inspect every
+        // competing segment end (not just the one the backtrace selects).
+        traceBC_ = BC;
+        traceBP_ = BP;
+        traceBR_.assign(BR.size(), std::vector<unsigned int>());
+        for (size_t jj = 0; jj < BR.size(); ++jj)
+            traceBR_[jj].assign(BR[jj].begin(), BR[jj].end());
     }
 
     // Backtracing from here:

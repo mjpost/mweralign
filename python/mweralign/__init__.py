@@ -16,7 +16,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from .mweralign import MwerAlign, align_texts, score_tokens, wer
+from .mweralign import (
+    AlignmentTrace,
+    CellCost,
+    MwerAlign,
+    align_texts,
+    align_texts_traced,
+    score_tokens,
+    wer,
+)
 
-__version__ = "1.2.0"
-__all__ = ["MwerAlign", "align_texts", "score_tokens", "wer"]
+__version__ = "1.3.0"
+__all__ = [
+    "MwerAlign",
+    "align_texts",
+    "align_texts_traced",
+    "score_tokens",
+    "wer",
+    "AlignmentTrace",
+    "CellCost",
+]
