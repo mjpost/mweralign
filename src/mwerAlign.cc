@@ -334,11 +334,17 @@ double MwerSegmenter::computeSpecialWER(const std::vector<std::vector<unsigned i
     if (J == 0)
         return 0;
 
-    if (MWER_UNLIKELY(collectTrace_)) {
+    // Clear stale trace state from a previous alignment. traceCells_ is gated by
+    // collectCells_ (independent of collectTrace_), so it must be cleared
+    // whenever either flag is set, or per-cell records would accumulate across
+    // alignments when collectCells_ is enabled without collectTrace_.
+    if (MWER_UNLIKELY(collectTrace_ || collectCells_)) {
         traceCells_.clear();
-        traceBC_.clear();
-        traceBP_.clear();
-        traceBR_.clear();
+        if (collectTrace_) {
+            traceBC_.clear();
+            traceBP_.clear();
+            traceBR_.clear();
+        }
     }
 
     for (size_t r = 0; r < R; ++r) { // initialization along reference axis i for all references
