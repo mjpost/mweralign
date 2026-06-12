@@ -100,6 +100,20 @@ class TestCJSegmenter:
         tokens = self.segmenter.encode(text)
         assert self.segmenter.decode(" ".join(tokens)) == text
 
+    @pytest.mark.parametrize("text", [
+        "literal ▁ meta symbol",   # a literal U+2581 (the space placeholder)
+        "▁leading",                # literal ▁ at the start
+        "trailing▁",               # literal ▁ at the end
+        "中▁文",                    # literal ▁ between Han characters
+    ])
+    def test_roundtrip_preserves_literal_meta_symbol(self, text):
+        # A literal '▁' is escaped on encode so it is not confused with an
+        # encoded space, and restored on decode (regression for it previously
+        # collapsing to a space). Note decode() still strips outer whitespace,
+        # since a segment-merge separator can leave a spurious edge space.
+        tokens = self.segmenter.encode(text)
+        assert self.segmenter.decode(" ".join(tokens)) == text
+
 
 @pytest.mark.skipif(True, reason="Requires SentencePiece model file")
 class TestSPSegmenter:

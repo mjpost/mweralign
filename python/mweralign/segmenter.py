@@ -59,6 +59,10 @@ def is_latin1(c):
 # without colliding with any literal input character (e.g. an actual '_').
 SPM_SPACE = "\u2581"
 
+# Sentinel used to escape a *literal* '▁' that already appears in the input, so
+# it is not later mistaken for an encoded space. NUL never occurs in real text.
+SPM_SPACE_ESCAPE = "\x00"
+
 
 class CJSegmenter(Segmenter):
     """
@@ -75,9 +79,12 @@ class CJSegmenter(Segmenter):
         treat each Latin1 word as a token, and insert whitespace in between.
         """
 
-        # Preserve existing whitespace by mapping spaces to the SentencePiece
-        # meta-symbol '▁', which never occurs in normal text and so cannot be
-        # confused with a literal input character (e.g. an actual '_').
+        # Escape any literal '▁' already in the input so it is not confused with
+        # the encoded spaces inserted below, then preserve existing whitespace by
+        # mapping spaces to the SentencePiece meta-symbol '▁'. '▁' never occurs in
+        # normal text and so cannot be confused with a literal input character
+        # (e.g. an actual '_'); the rare literal '▁' is handled by the escape.
+        text = text.replace(SPM_SPACE, SPM_SPACE_ESCAPE)
         text = text.replace(" ", SPM_SPACE)
 
         tokens = []
@@ -108,8 +115,10 @@ class CJSegmenter(Segmenter):
             Decoded string
         """
 
-        # Drop the inter-token separator spaces, then restore the encoded spaces.
-        text = text.replace(" ", "").replace(SPM_SPACE, " ").strip()
+        # Drop the inter-token separator spaces, restore the encoded spaces, then
+        # un-escape any literal '▁'. No strip(): leading/trailing spaces in the
+        # original text were encoded as '▁' and must survive the round-trip.
+        text = text.replace(" ", "").replace(SPM_SPACE, " ").replace(SPM_SPACE_ESCAPE, SPM_SPACE)
         return text
     
 
