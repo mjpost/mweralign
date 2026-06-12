@@ -1,1 +1,1 @@
--r ref.txt -t hyp.txt -d docids.txt -m spm32k.model
+-r ref.txt -t hyp.txt -d docids.txt -m ../spm32k.model

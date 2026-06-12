@@ -114,10 +114,7 @@ def write_case(name: str, cmd: str, files: dict[str, str]) -> None:
     case_dir.mkdir(parents=True, exist_ok=True)
     (case_dir / "cmd").write_text(cmd.strip() + "\n", encoding="utf-8")
     for fname, content in files.items():
-        if isinstance(content, bytes):
-            (case_dir / fname).write_bytes(content)
-        else:
-            (case_dir / fname).write_text(content, encoding="utf-8")
+        (case_dir / fname).write_text(content, encoding="utf-8")
     # Remove any stale golden so it is regenerated against the new fixture.
     (case_dir / "expected.txt").unlink(missing_ok=True)
     print(f"wrote {name}: {len(files)} fixture file(s)")
@@ -131,8 +128,6 @@ def build_merge_case(
     name: str,
     langpair: str,
     cmd_extra: str,
-    *,
-    extra_files: dict[str, str] | None = None,
     **slice_kw,
 ) -> None:
     refs, docids = fetch(langpair)
@@ -143,8 +138,6 @@ def build_merge_case(
         "docids.txt": lines(sel_docids),
         "hyp.txt": lines(hyps),
     }
-    if extra_files:
-        files.update(extra_files)
     write_case(
         name,
         f"-r ref.txt -t hyp.txt -d docids.txt {cmd_extra}".strip(),
@@ -176,12 +169,17 @@ def main() -> None:
             "(see scripts/spm-train.sh)."
         )
 
+    # A single shared model fixture, referenced by SPM-based cases via the
+    # relative path ``../spm32k.model`` (cases run with cwd = their own dir).
+    shared_model = REGRESSION_DIR / SPM_MODEL_NAME
+    shared_model.write_bytes(SPM_MODEL_SRC.read_bytes())
+    print(f"wrote shared model fixture: {shared_model}")
+
     build_merge_case("wmt24_ende_merge_none", "en-de", "")
     build_merge_case(
         "wmt24_ende_merge_spm",
         "en-de",
-        f"-m {SPM_MODEL_NAME}",
-        extra_files={SPM_MODEL_NAME: SPM_MODEL_SRC.read_bytes()},
+        f"-m ../{SPM_MODEL_NAME}",
     )
     build_merge_case("wmt24_jazh_merge_cj", "ja-zh", "-m cj -l zh", max_chars=120)
     build_score_case("wmt24_ende_score", "en-de")
