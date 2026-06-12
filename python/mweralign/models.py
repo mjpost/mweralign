@@ -39,7 +39,7 @@ from typing import Dict, Optional
 logger = logging.getLogger("mweralign")
 
 # GitHub Release that hosts the SPM model assets.
-_REPO = "mjpost/MWERalign"
+_REPO = "mjpost/mweralign"
 RELEASE_TAG = "spm-models-v1"
 _BASE_URL = f"https://github.com/{_REPO}/releases/download/{RELEASE_TAG}"
 
