@@ -32,8 +32,9 @@ The core flags are:
 | `-r` | `--ref-file`   | Reference file: the target segmentation, one segment per line. **Required.** |
 | `-t` | `--hyp-file`   | Hypothesis file: the system output to re-segment. **Required.** |
 | `-o` | `--output`     | Output file (default: stdout). |
-| `-m` | `--tokenizer`  | Tokenizer/segmenter to use (see below). |
+| `-m` | `--tokenizer`  | Tokenizer/segmenter to use (default: `spm32k`; see below). |
 | `-l` | `--language`   | ISO 639-1 language code (e.g. `de`, `zh`). |
+| `-w` | `--no-whitespace` | The language does not delimit words with whitespace (CJK); see *Language code*. |
 | `-d` | `--docid-file` | Document ids, one per reference line (see *Document-aware alignment*). |
 |      | `--score`      | Scoring mode: report WER instead of re-segmenting (see *Scoring mode*). |
 
@@ -50,8 +51,10 @@ segment:
 
 ### Tokenization
 
-For good alignment you should use a tokenizer, selected with `-m`. Supported values are:
+For good alignment you should use a tokenizer, selected with `-m`. The default is
+`spm32k` (see the recommendation below). Supported values are:
 
+* `none` (or `whitespace`) — no tokenizer; split on whitespace only;
 * `cj` — segments Han characters with whitespace (dependency-free, no model needed);
 * a named, on-demand SentencePiece model: `spm32k`, `spm64k`, `spm128k`, or `spm256k`
   (`spm` is an alias for `spm256k`);
@@ -62,7 +65,9 @@ the project. They are downloaded on demand the first time you request them, fetc
 the project's GitHub Release, verified against a checksum, and cached under
 `~/.cache/mweralign/models` (override with `MWERALIGN_SPM_DIR`):
 
-    mweralign -r ref.txt -t hyp.txt -o aligned.txt -m spm32k
+    mweralign -r ref.txt -t hyp.txt -o aligned.txt -m spm32k   # the default
+
+    mweralign -r ref.txt -t hyp.txt -o aligned.txt -m none     # plain whitespace
 
 To pre-fetch the models (e.g. for offline use):
 
@@ -90,6 +95,14 @@ the underlying AS-WER algorithm not to prevent sentences from starting with the
 SentencePiece space character. For other languages it has no effect.
 
     mweralign -r ref.zh.txt -t hyp.txt -o aligned.txt -m spm256k -l zh
+
+Equivalently, you can pass `--no-whitespace` (`-w`) for any language whose script does not
+delimit words with whitespace (e.g. Chinese, Japanese), without naming a specific language:
+
+    mweralign -r ref.zh.txt -t hyp.txt -o aligned.txt -m spm256k -w
+
+If the reference looks like a CJK script but neither `-l zh`/`-l ja` nor `-w` was given,
+mweralign prints a one-line suggestion to add the flag.
 
 When a SentencePiece model is used to tokenize a non-CJK language, the aligner also forbids
 *mid-word* segment boundaries: no output segment may begin on a word-internal sub-word piece

@@ -162,13 +162,13 @@ def test_score_matches_alignment_aswer(tmp_path):
     sys_in.write_text("hello this is a\nmeeting welcome here everybody\ngood-bye see you\n")
 
     # Align and capture both the AS-WER (stderr) and the segmented output.
-    _, stderr = _run_cli(["-r", str(ref), "-t", str(sys_in), "-o", str(aligned)])
+    _, stderr = _run_cli(["-r", str(ref), "-t", str(sys_in), "-o", str(aligned), "-m", "none"])
     m = re.search(r"AS-WER.*?:\s*([0-9.]+)", stderr)
     assert m, f"could not find AS-WER in stderr:\n{stderr}"
     aswer = float(m.group(1))
 
     # Score the aligner's own output back against the references.
-    stdout, _ = _run_cli(["--score", "-r", str(ref), "-t", str(aligned)])
+    stdout, _ = _run_cli(["--score", "-r", str(ref), "-t", str(aligned), "-m", "none"])
     m = re.search(r"TOTAL: WER=([0-9.]+)", stdout)
     assert m, f"could not find TOTAL WER in scoring output:\n{stdout}"
     score_wer = float(m.group(1))

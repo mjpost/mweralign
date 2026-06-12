@@ -21,7 +21,7 @@ limitations under the License.
 from typing import List, NamedTuple, Optional, Tuple
 import sentencepiece as spm
 from ._mweralign import MwerSegmenter as _MwerSegmenter
-from .segmenter import CJSegmenter, SPSegmenter
+from .segmenter import CJSegmenter, SPSegmenter, cjk_fraction
 from . import models
 
 # load logger
@@ -403,11 +403,16 @@ def main():
     parser.add_argument("--docid-file", "-d", type=argparse.FileType("r"), default=None, help="Docid file")
     parser.add_argument('--output', '-o', type=argparse.FileType("w"), default=sys.stdout,
                         help='Output file (default: stdout)')
-    parser.add_argument('--tokenizer', '-m', type=str, default=None,
-                        help="Tokenizer to use: 'cj', a SentencePiece model path, "
-                             "or a named model downloaded on demand "
-                             "(spm32k, spm64k, spm128k, spm256k; 'spm' = 256k).")
+    parser.add_argument('--tokenizer', '-m', type=str, default="spm32k",
+                        help="Tokenizer to use (default: spm32k): 'none' for plain "
+                             "whitespace, 'cj' for Han-character segmentation, a "
+                             "SentencePiece model path, or a named model downloaded on "
+                             "demand (spm32k, spm64k, spm128k, spm256k; 'spm' = 256k).")
     parser.add_argument("--language", "-l", default=None, help="Language being aligned (e.g, en)")
+    parser.add_argument("--no-whitespace", "-w", action="store_true", default=False,
+                        help="The aligned language does not delimit words with whitespace "
+                             "(e.g. Chinese, Japanese). Lets segments begin at word-internal "
+                             "boundaries; equivalent to passing -l zh / -l ja.")
     parser.add_argument("--no-detok", action="store_true", default=False)
     parser.add_argument("--score", action="store_true", default=False,
                         help="Scoring mode: ref and hyp are already aligned line-by-line; "
@@ -426,7 +431,10 @@ def main():
     hyps = [line.strip() for line in args.hyp_file.readlines()]
 
     segmenter = None
-    if args.tokenizer == "cj":
+    if args.tokenizer in ("none", "whitespace"):
+        # Plain whitespace tokenization (no segmenter).
+        segmenter = None
+    elif args.tokenizer == "cj":
         segmenter = CJSegmenter()
 
     elif args.tokenizer is not None:
@@ -438,6 +446,10 @@ def main():
         except Exception as e:
             logger.info(f"Error loading tokenizer: {e}")
             sys.exit(1)
+
+    # Whether the aligned language delimits words with whitespace. CJK languages
+    # (and an explicit --no-whitespace) let segments start mid-"word".
+    non_whitespace_lang = args.no_whitespace or args.language in ("ja", "zh")
 
     def tokenize_and_join(text: List[str]) -> List[str]:
         """Tokenize text using the segmenter."""
@@ -512,11 +524,20 @@ def main():
     if current_docid_start < len(docids):
         docid_ranges.append((current_docid_start, len(docids)))
 
+    # Nudge users who are aligning CJK text without telling the aligner about it.
+    if not non_whitespace_lang and cjk_fraction(" ".join(refs[:200])) > 0.2:
+        logger.warning(
+            "The reference looks like a non-whitespace script (e.g. Chinese or "
+            "Japanese), but no language was set. Pass -l zh / -l ja (or "
+            "--no-whitespace / -w) so the aligner can begin segments at "
+            "word-internal boundaries."
+        )
+
     # This param causes the AS-WER algorithm to disallow internal tokens
     # at the start of sentences (via a high cost penalty). This is important
     # in whitespace languages, but is not what we want with C&J, where most tokens
     # appear to be internal because there was no whitespace.
-    is_tokenized = type(segmenter) is SPSegmenter and args.language not in ["ja", "zh"]
+    is_tokenized = type(segmenter) is SPSegmenter and not non_whitespace_lang
 
     trace_out = sys.stderr if args.trace_file is None else args.trace_file
     collect_trace = args.trace_file is not None
