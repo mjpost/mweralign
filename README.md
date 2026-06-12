@@ -37,6 +37,7 @@ The core flags are:
 | `-w` | `--no-whitespace` | The language does not delimit words with whitespace (CJK); see *Language code*. |
 | `-d` | `--docid-file` | Document ids, one per reference line (see *Document-aware alignment*). |
 |      | `--score`      | Scoring mode: report WER instead of re-segmenting (see *Scoring mode*). |
+| `-V` | `--version`    | Print the installed version and exit. |
 
 ### Aligning a hypothesis to a reference segmentation
 

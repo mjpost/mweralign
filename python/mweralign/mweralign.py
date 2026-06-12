@@ -396,8 +396,12 @@ def main():
     """Command-line interface for mweralign."""
     import argparse
     import sys
-    
+
+    from . import __version__
+
     parser = argparse.ArgumentParser(description='Minimum Word Error Rate Alignment')
+    parser.add_argument("--version", "-V", action="version",
+                        version=f"%(prog)s {__version__}")
     parser.add_argument('--ref-file', "-r", type=argparse.FileType("r"), required=True, help='Reference text or file')
     parser.add_argument('--hyp-file', "-t", type=argparse.FileType("r"), required=True, help='Hypothesis text or file')
     parser.add_argument("--docid-file", "-d", type=argparse.FileType("r"), default=None, help="Docid file")
